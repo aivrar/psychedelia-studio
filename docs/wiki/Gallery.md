@@ -22,7 +22,7 @@ These are actual renders and interface screenshots from Psychedelia Studio. No g
 
 ## Endless scene recipes
 
-See the illustrated [Endless Scenes tour](Endless-Scenes.md) for all eight images. Each scene is 1280×720 at time 8 with seed 0 and seed vector `[0.31, 0.61, 0.83, 0.21]`.
+See the illustrated [Endless Scenes tour](Endless-Scenes.md) for a selection of worlds. The robot screenshot appears in the [Robot Foundry guide](Robot-Foundry.md). Each scene is 1280×720 at time 8 with seed 0 and seed vector `[0.31, 0.61, 0.83, 0.21]`.
 
 | Image | Effect / preset |
 | --- | --- |
@@ -33,7 +33,7 @@ See the illustrated [Endless Scenes tour](Endless-Scenes.md) for all eight image
 | [Crystal Geode](images/crystal-geode.png) | Opal Prism Voyage |
 | [Golden Hour Clouds](images/golden-hour-clouds.png) | Stormlight Cathedral |
 | [Planet Sunrise](images/planet-sunrise.png) | Neon Ring Odyssey |
-| [Robot Foundry](images/robot-foundry.png) | Neon Night Shift |
+| [Robot Foundry guide](Robot-Foundry.md) | Neon Night Shift |
 
 The five additional scene samples above use their default base controls at the same time/seed. Starter-preset overrides are captured in [capture-scenes.json](capture-scenes.json). Rendering can still vary slightly by GPU and driver; progressive and simulation effects need additional state considerations.
 

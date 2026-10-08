@@ -43,7 +43,7 @@ Create a publishable local export:
 node tools/prepare-wiki.mjs
 ```
 
-This writes `.wiki-export/` with pages, `_Sidebar.md`, `_Footer.md`, images, and capture metadata. It rewrites repository-relative page links to full wiki URLs and image links to that wiki's raw image URLs. The original `docs/wiki/` remains easy to browse inside the main repository. GitHub documents Markdown wiki links and image embedding in [Editing wiki content](https://docs.github.com/en/communities/documenting-your-project-with-wikis/editing-wiki-content).
+This writes `.wiki-export/` with pages, `_Sidebar.md`, `_Footer.md`, images, and capture metadata. It removes each page's leading H1 because GitHub already displays the page title, then rewrites repository-relative page links to full wiki URLs and image links to that wiki's raw image URLs. The original `docs/wiki/` keeps its titles for browsing inside the main repository. GitHub documents Markdown wiki links and image embedding in [Editing wiki content](https://docs.github.com/en/communities/documenting-your-project-with-wikis/editing-wiki-content).
 
 After the main repository and initial wiki page exist, clone the wiki to a sibling directory and export into it:
 

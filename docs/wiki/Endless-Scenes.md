@@ -31,9 +31,9 @@ These scenes create their worlds procedurally. “Endless” describes sustained
 | --- | --- |
 | ![Opal Prism Voyage](images/crystal-geode.png) | ![Stormlight Cathedral](images/golden-hour-clouds.png) |
 
-| Planet Sunrise | Robot Foundry |
+| Planet Sunrise | Mandelbulb Flight (Fractals category) |
 | --- | --- |
-| ![Neon Ring Odyssey](images/planet-sunrise.png) | ![Neon Night Shift](images/robot-foundry.png) |
+| ![Neon Ring Odyssey](images/planet-sunrise.png) | ![Mandelbulb Flight](images/mandelbulb-flight.png) |
 
 ## Build a flowing shot
 

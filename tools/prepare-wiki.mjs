@@ -16,7 +16,9 @@ await mkdir(output,{recursive:true});
 let count=0;
 for(const name of entries.filter(n=>n.endsWith('.md'))){
  const markdown=await readFile(join(source,name),'utf8');
- const result=markdown.replace(/\]\(([^)\s]+)\)/g,(full,target)=>{
+ // GitHub supplies the page H1; keep the source title only for repository browsing.
+ const body=markdown.replace(/^\uFEFF?# [^\r\n]+\r?\n(?:[ \t]*\r?\n)*/, '');
+ const result=body.replace(/\]\(([^)\s]+)\)/g,(full,target)=>{
   if(/^(?:https?:|mailto:|#)/.test(target))return full;
   const [path,fragment]=target.split('#');
   if(path.endsWith('.md'))return ']('+wiki+path.slice(0,-3)+(fragment?'#'+fragment:'')+')';
