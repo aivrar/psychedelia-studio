@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psychedelia Studio</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Bar -->
+        <header id="topbar">
+            <div class="topbar-left">
+                <h1 class="logo">Psychedelia</h1>
+                <span class="gpu-badge" id="gpuBadge">detecting...</span>
+            </div>
+            <div class="topbar-center">
+                <button id="btnPlay" class="tb-btn active" title="Play (Space)" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg></button>
+                <button id="btnPause" class="tb-btn" title="Pause (Space)" aria-label="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></svg></button>
+                <span class="tb-sep"></span>
+                <button id="btnResetLooks" class="tb-btn" title="Reset all FX, overlays and links; global beat reactions back to Club (X)" aria-label="Reset FX and overlays"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg></button>
+                <button id="btnRandomize" class="tb-btn" title="Randomize parameters (N)" aria-label="Randomize"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+                <button id="btnUndo" class="tb-btn" disabled title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 7 7v3"/></svg></button>
+                <button id="btnRedo" class="tb-btn" disabled title="Redo (Ctrl+Y / Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 4 6 6-6 6m6-6H10a7 7 0 0 0-7 7v3"/></svg></button>
+                <button id="btnRecord" class="tb-btn rec-btn" title="Record video (R). Press again to stop" aria-label="Record"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></button>
+                <button id="btnSnapshot" class="tb-btn" title="Save PNG snapshot (P)" aria-label="Snapshot"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+                <button id="btnFullscreen" class="tb-btn" title="Fullscreen (F)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
+            </div>
+            <div class="topbar-right">
+                <button id="btnTimeline" class="tb-btn" title="Timeline (T)" aria-label="Timeline"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v5M14 5v5"/></svg></button>
+                <button id="btnGallery" class="tb-btn" title="Gallery (G)" aria-label="Gallery"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 9"/></svg></button>
+                <button id="btnHelp" class="tb-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg></button>
+                <button id="btnHideUI" class="tb-btn" title="Hide interface (H)" aria-label="Hide interface"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4 20 20 4"/></svg></button>
+                <button id="btnSettings" class="tb-btn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div id="main">
+            <!-- Canvas Area -->
+            <div id="canvasWrap">
+                <canvas id="mainCanvas"></canvas>
+                <div id="fpsCounter">0 FPS</div>
+                <div id="qualityBadge" class="quality-badge hidden"></div>
+                <div id="effectStatus" class="hidden" role="status" aria-live="polite"></div>
+                <div id="compileStatus" class="compile-status hidden" role="status" aria-live="polite"><span class="compile-spinner"></span><span class="compile-label">Compiling…</span></div>
+                <div id="recordingIndicator" class="hidden" title="Click to stop recording (R)">&#9679; REC</div>
+                <div id="effectToast" class="effect-toast hidden"></div>
+                <button id="btnShowUI" class="show-ui-btn" title="Show interface (H)" aria-label="Show interface"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/></svg></button>
+            </div>
+
+            <!-- Sidebar -->
+            <aside id="sidebar">
+                <nav id="sideTabs" class="side-tabs" role="tablist" aria-label="Sidebar sections">
+                    <button class="side-tab active" data-tab="effect" role="tab" title="Effect (1)">Effect</button>
+                    <button class="side-tab" data-tab="fx" role="tab" title="Post FX (2)">FX</button>
+                    <button class="side-tab" data-tab="overlay" role="tab" title="Overlays (3)">Overlays</button>
+                    <button class="side-tab" data-tab="audio" role="tab" title="Music &amp; audio (4)">Audio</button>
+                    <button class="side-tab" data-tab="output" role="tab" title="Output &amp; performance (5)">Output</button>
+                </nav>
+
+                <div class="tab-pane active" data-pane="effect">
+                    <!-- Effect Selector -->
+                    <section class="panel" id="effectPanel">
+                        <h2 class="panel-title">Effect <span id="effectCount" class="panel-meta"></span></h2>
+                        <div class="effect-filter">
+                            <input type="text" id="effectSearch" autocomplete="off" placeholder="Search effects, modes, presets">
+                            <select id="effectCategoryFilter"></select>
+                        </div>
+                        <div class="effect-nav">
+                            <button id="btnPrevEffect" class="icon-btn" title="Previous effect ([)" aria-label="Previous effect"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+                            <select id="effectSelect"></select>
+                            <button id="btnNextEffect" class="icon-btn" title="Next effect (])" aria-label="Next effect"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+                            <button id="btnFavorite" class="icon-btn fav-btn" title="Add to favorites (S)" aria-label="Favorite" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
+                        </div>
+                        <div class="effect-chips"><span id="effectCategoryChip" class="chip"></span><span id="effectCostChip" class="chip hidden"></span></div>
+                        <p id="effectDesc" class="effect-desc"></p>
+                    </section>
+
+                    <!-- Global motion and view -->
+                    <section class="panel collapsible" id="motionPanel" data-section="motion">
+                        <h2 class="panel-title section-head">Global Motion &amp; View <button type="button" class="panel-action" id="motionReset" title="Speed, rotation and zoom back to normal">&#8634; Reset</button></h2>
+                        <p class="panel-hint section-hint">Applies to every effect. Double-click any slider to reset it.</p>
+                        <div class="param-row">
+                            <label for="animSpeed">Animation Speed</label>
+                            <div class="slider-wrap">
+                                <input type="range" id="animSpeed" min="0" max="12" value="1" step="0.05">
+                                <span class="val-display" id="animSpeedVal">1.0x</span>
+                            </div>
+                        </div>
+                        <div class="param-row">
+                            <label for="rotSpeed" title="Spins the whole picture. Left of centre turns anticlockwise, right turns clockwise.">Rotation (&#8634; &minus; / + &#8635;)</label>
+                            <div class="slider-wrap">
+                                <input type="range" id="rotSpeed" min="-3" max="3" value="0" step="0.05">
+                                <span class="val-display" id="rotSpeedVal">0</span>
+                            </div>
+                        </div>
+                        <div class="param-row">
+                            <label for="viewZoom">View Zoom</label>
+                            <div class="slider-wrap">
+                                <input type="range" id="viewZoom" min="0.25" max="8" value="1" step="0.05">
+                                <span class="val-display" id="viewZoomVal">1.00x</span>
+                            </div>
+                        </div>
+                        <div class="param-row">
+                            <label for="viewZoomDepth" title="Breathing zoom in and out">Zoom Pulse</label>
+                            <div class="slider-wrap">
+                                <input type="range" id="viewZoomDepth" min="0" max="1.5" value="0" step="0.05">
+                                <span class="val-display" id="viewZoomDepthVal">0%</span>
+                            </div>
+                        </div>
+                        <div class="param-row">
+                            <label for="viewZoomSpeed">Zoom Pulse Speed</label>
+                            <div class="slider-wrap">
+                                <input type="range" id="viewZoomSpeed" min="0" max="8" value="0.7" step="0.05">
+                                <span class="val-display" id="viewZoomSpeedVal">0.70</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Parameters -->
+                    <section class="panel collapsible" id="paramsPanel" data-section="params">
+                        <h2 class="panel-title section-head">Parameters <button type="button" class="panel-action" id="paramsReset" title="Every parameter of this effect back to its default">&#8634; Defaults</button></h2>
+                        <div id="paramsContainer"></div>
+                    </section>
+
+
+                </div>
+
+                <div class="tab-pane" data-pane="fx"></div>
+                <div class="tab-pane" data-pane="overlay"></div>
+                <div class="tab-pane" data-pane="audio"></div>
+
+                <div class="tab-pane" data-pane="output">
+                    <section class="panel collapsible" id="renderPanel" data-section="render">
+                        <h2 class="panel-title section-head">Render MP4</h2>
+                        <p class="panel-hint">Create a finished video using the resolution, FPS, quality, animation and Sound settings below. Renders every frame at full detail.</p>
+                        <div class="param-row">
+                            <label for="renderLengthMode">Length</label>
+                            <select id="renderLengthMode">
+                                <option value="custom" selected>Custom duration</option>
+                                <option value="audio">Match full audio track</option>
+                                <option value="remaining">Remaining audio</option>
+                            </select>
+                        </div>
+                        <div class="param-row" id="renderSecondsRow">
+                            <label for="renderSeconds">Seconds</label>
+                            <input id="renderSeconds" type="number" min="0.1" max="3600" step="0.1" value="30">
+                        </div>
+                        <div class="render-buttons">
+                            <button id="btnRenderMP4" type="button" class="sm-btn render-primary">Render MP4</button>
+                            <button id="btnRenderAudio" type="button" class="sm-btn">Choose audio…</button>
+                        </div>
+                        <progress id="renderProgress" class="hidden" max="1" value="0" aria-label="MP4 rendering progress"></progress>
+                        <div class="render-buttons hidden" id="renderActions">
+                            <button id="btnRenderStop" type="button" class="sm-btn">Stop &amp; save partial</button>
+                            <button id="btnRenderCancel" type="button" class="sm-btn">Cancel</button>
+                        </div>
+                        <p id="renderStatus" class="panel-hint" role="status"></p>
+                    </section>
+                    <!-- Output Settings -->
+                    <section class="panel collapsible" id="outputPanel" data-section="output">
+                        <h2 class="panel-title section-head">Output</h2>
+                        <div class="param-row">
+                            <label for="recMode">Record Mode</label>
+                            <select id="recMode">
+                                <option value="live" selected>Live recording (with audio)</option>
+                                <option value="smooth">Smooth MP4 (every frame)</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label>Resolution</label>
+                            <select id="resSelect">
+                                <option value="640x360">360p</option>
+                                <option value="854x480">480p</option>
+                                <option value="1280x720" selected>720p</option>
+                                <option value="1920x1080">1080p</option>
+                                <option value="2560x1440">1440p</option>
+                                <option value="3840x2160">4K</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label>Video FPS</label>
+                            <select id="fpsSelect">
+                                <option value="24">24</option>
+                                <option value="30" selected>30</option>
+                                <option value="60">60</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="loopMode" title="Continuous keeps evolving. Loop restarts the animation clock; whether the endpoints match depends on the effect.">Animation</label>
+                            <select id="loopMode">
+                                <option value="continuous" selected>Continuous</option>
+                                <option value="loop">Loop</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="durationInput" title="With Animation set to Loop, the animation restarts every this many seconds. Recording Length can use the same length.">Loop Length (sec)</label>
+                            <input type="number" id="durationInput" value="10" min="1" max="300" step="0.5">
+                        </div>
+                        <div class="param-row">
+                            <label for="recLength">Recording Length</label>
+                            <select id="recLength" title="When a recording stops by itself. You can always stop early with R or the record button.">
+                                <option value="manual" selected>Until I press stop</option>
+                                <option value="preview">Same as Loop Length</option>
+                                <option value="15">15 seconds</option>
+                                <option value="30">30 seconds</option>
+                                <option value="60">1 minute</option>
+                                <option value="120">2 minutes</option>
+                                <option value="300">5 minutes</option>
+                                <option value="600">10 minutes</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="recFormat">Record Format</label>
+                            <select id="recFormat">
+                                <option value="mp4" selected>MP4 (H.264 + AAC)</option>
+                                <option value="webm">WebM (VP9 + Opus)</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="recQuality">Video Quality</label>
+                            <select id="recQuality" title="Bitrate preset, scaled to the resolution and frame rate">
+                                <option value="draft">Draft (small files)</option>
+                                <option value="standard">Standard</option>
+                                <option value="high" selected>High</option>
+                                <option value="very_high">Very High</option>
+                                <option value="max">Maximum</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="recDetail">Recording Detail</label>
+                            <select id="recDetail" title="Adaptive lowers the internal detail of heavy effects so the recording stays smooth. The video keeps the chosen resolution.">
+                                <option value="adaptive" selected>Adaptive (smoothest)</option>
+                                <option value="full">Full detail (may stutter)</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label for="recAudio">Sound</label>
+                            <select id="recAudio" title="Records the studio music, the audio file and captured playback">
+                                <option value="all" selected>Record app audio</option>
+                                <option value="none">No sound</option>
+                            </select>
+                        </div>
+                        <p class="panel-hint" id="recInfo"></p>
+                    </section>
+                    <section class="panel collapsible" id="performancePanel" data-section="performance">
+                        <h2 class="panel-title section-head">Performance</h2>
+                        <div class="param-row">
+                            <label>Preview Quality</label>
+                            <select id="qualitySelect" title="Internal render resolution for shader effects. Auto lowers it when the frame rate drops.">
+                                <option value="auto" selected>Auto (adaptive)</option>
+                                <option value="1">Full (100%)</option>
+                                <option value="0.75">High (75%)</option>
+                                <option value="0.5">Medium (50%)</option>
+                                <option value="0.35">Low (35%)</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label>Preview FPS Cap</label>
+                            <select id="previewFpsSelect" title="Limit how often the preview renders. Lower caps free the GPU for a smoother UI.">
+                                <option value="0" selected>Display rate</option>
+                                <option value="60">60</option>
+                                <option value="30">30</option>
+                                <option value="24">24</option>
+                            </select>
+                        </div>
+                        <div class="param-row">
+                            <label>UI Priority</label>
+                            <select id="uiPriorityMode">
+                                <option value="visual">Full Visual</option>
+                                <option value="responsive" selected>Responsive</option>
+                                <option value="strong">Strong UI</option>
+                            </select>
+                        </div>
+                        <p class="panel-hint">Heavy 3D flights run smoother with Auto quality or a 30 FPS cap. While recording, the preview runs at the recording FPS so every rendered frame goes into the video.</p>
+                    </section>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div id="helpModal" class="modal hidden">
+            <div class="modal-content modal-sm">
+                <div class="modal-header">
+                    <h2>Keyboard Shortcuts</h2>
+                    <button class="modal-close" id="helpClose">&times;</button>
+                </div>
+                <div class="shortcut-list">
+                    <div><kbd>Ctrl Z</kbd><span>Undo a creative edit</span></div>
+                    <div><kbd>Ctrl Y</kbd> / <kbd>Ctrl Shift Z</kbd><span>Redo</span></div>
+                    <div><kbd>Space</kbd><span>Play / pause</span></div>
+                    <div><kbd>[</kbd> <kbd>]</kbd><span>Previous / next effect</span></div>
+                    <div><kbd>N</kbd><span>Randomize parameters</span></div>
+                    <div><kbd>B</kbd><span>Shuffle FX + overlays (or the open tab)</span></div>
+                    <div><kbd>X</kbd><span>Reset all FX, overlays and links</span></div>
+                    <div><kbd>V</kbd><span>Global beat reactions on / off</span></div>
+                    <div><kbd>S</kbd><span>Favorite current effect</span></div>
+                    <div><kbd>P</kbd><span>Save PNG snapshot</span></div>
+                    <div><kbd>R</kbd><span>Start / stop recording</span></div>
+                    <div><kbd>F</kbd><span>Fullscreen</span></div>
+                    <div><kbd>H</kbd><span>Hide / show interface</span></div>
+                    <div><kbd>1</kbd>–<kbd>5</kbd><span>Sidebar tabs</span></div>
+                    <div><kbd>T</kbd><span>Timeline</span></div>
+                    <div><kbd>G</kbd><span>Gallery</span></div>
+                    <div><kbd>M</kbd><span>Music on / off</span></div>
+                    <div><kbd>Dbl-click</kbd><span>A slider resets it to default</span></div>
+                    <div><kbd>?</kbd><span>This help</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gallery Modal -->
+        <div id="galleryModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Gallery</h2>
+                    <button class="modal-close" id="galleryClose">&times;</button>
+                </div>
+                <div id="galleryGrid" class="gallery-grid"></div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal hidden">
+            <div class="modal-content modal-sm">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close" id="settingsClose">&times;</button>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-row">
+                        <label>Renderer</label>
+                        <span id="rendererInfo">--</span>
+                    </div>
+                    <div class="setting-row">
+                        <label>GPU</label>
+                        <span id="gpuInfo">--</span>
+                    </div>
+                    <div class="setting-row">
+                        <label>Max Texture Size</label>
+                        <span id="maxTexInfo">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="lib/tone.min.js"></script>
+
+    <!-- Engine -->
+    <script src="src/engine/renderer.js"></script>
+    <script src="src/engine/palettes.js"></script>
+    <script src="src/engine/dive-targets.js"></script>
+    <script src="src/engine/glow-lines.js"></script>
+    <script src="src/engine/gpu-sim.js"></script>
+    <script src="src/workers/progressive-density-worker.js"></script>
+    <script src="src/engine/progressive-density-renderer.js"></script>
+    <script src="src/engine/shader-manager.js"></script>
+    <script src="src/engine/shadertoy-compiler.js"></script>
+    <script src="src/engine/shadertoy-uniforms.js"></script>
+    <script src="src/engine/audio-signal.js"></script>
+    <script src="src/engine/audio-analysis.js"></script>
+    <script src="src/engine/audio-reactor.js"></script>
+    <script src="src/engine/shadertoy-channels.js"></script>
+    <script src="src/engine/shadertoy-pass-graph.js"></script>
+    <script src="src/engine/mp4-writer.js"></script>
+    <script src="src/engine/export.js"></script>
+    <script src="src/engine/overlays.js"></script>
+    <script src="src/engine/post-fx-library.js"></script>
+    <script src="src/engine/post-process.js"></script>
+    <script src="src/engine/timeline.js"></script>
+    <script src="src/engine/music-sounds.js"></script>
+    <script src="src/engine/music-genres.js"></script>
+    <script src="src/engine/music.js"></script>
+    <script src="src/engine/offline-audio.js"></script>
+
+    <!-- GUI -->
+    <script src="src/gui/controls.js"></script>
+    <script src="src/gui/gallery.js"></script>
+    <script src="src/gui/react-ui.js"></script>
+    <script src="src/gui/shuffle-profiles.js"></script>
+    <script src="src/gui/look-shuffle.js"></script>
+    <script src="src/gui/overlay-controls.js"></script>
+    <script src="src/gui/postprocess-controls.js"></script>
+    <script src="src/gui/timeline-ui.js"></script>
+    <script src="src/gui/music-controls.js"></script>
+    <script src="src/gui/shadertoy-editor.js"></script>
+    <script src="src/gui/ui-shell.js"></script>
+    <script src="src/gui/render-controls.js"></script>
+    <script src="src/engine/setups.js"></script>
+    <script src="src/engine/edit-history.js"></script>
+
+    <!-- Effects Registry -->
+    <script src="src/effects/registry.js"></script>
+    <script src="src/effects/shadertoy-effect-runner.js"></script>
+
+    <!-- Effects -->
+    <script src="src/effects/plasma.js"></script>
+    <script src="src/effects/mandelbrot.js"></script>
+    <script src="src/effects/julia-set.js"></script>
+    <script src="src/effects/tunnel.js"></script>
+    <script src="src/effects/kaleidoscope.js"></script>
+    <script src="src/effects/fire.js"></script>
+    <script src="src/effects/starfield.js"></script>
+    <script src="src/effects/metaballs.js"></script>
+    <script src="src/effects/rotozoom.js"></script>
+    <script src="src/effects/moire.js"></script>
+    <script src="src/effects/voronoi.js"></script>
+    <script src="src/effects/feedback-loop.js"></script>
+    <script src="src/effects/flow-field.js"></script>
+    <script src="src/effects/perlin-noise.js"></script>
+    <script src="src/effects/domain-warp.js"></script>
+    <script src="src/effects/reaction-diffusion.js"></script>
+    <script src="src/effects/swirl.js"></script>
+    <script src="src/effects/wave-distort.js"></script>
+    <script src="src/effects/lissajous.js"></script>
+    <script src="src/effects/spirograph.js"></script>
+    <script src="src/effects/sine-interference.js"></script>
+    <script src="src/effects/polar-spiral.js"></script>
+    <script src="src/effects/color-cycle.js"></script>
+    <script src="src/effects/water-ripple.js"></script>
+    <script src="src/effects/burning-ship.js"></script>
+    <script src="src/effects/newton-fractal.js"></script>
+    <script src="src/effects/lorenz-attractor.js"></script>
+    <script src="src/effects/game-of-life.js"></script>
+    <script src="src/effects/droste.js"></script>
+    <script src="src/effects/fractal-brownian.js"></script>
+    <script src="src/effects/mandelbrot-power.js"></script>
+    <script src="src/effects/mandelbrot-deep.js"></script>
+    <script src="src/effects/phoenix-fractal.js"></script>
+    <script src="src/effects/nova-fractal.js"></script>
+    <script src="src/effects/orbit-trap.js"></script>
+    <script src="src/effects/tricorn.js"></script>
+    <script src="src/effects/fractal-flame.js"></script>
+    <script src="src/effects/lyapunov-fractal.js"></script>
+    <script src="src/effects/sierpinski.js"></script>
+    <script src="src/effects/mandelbulb-slice.js"></script>
+    <script src="src/effects/fractal-flight-common.js"></script>
+    <script src="src/effects/fractal-lab-common.js"></script>
+    <script src="src/effects/escape-time-lab.js"></script>
+    <script src="src/effects/analytic-field-lab.js"></script>
+    <script src="src/effects/procedural-field-lab.js"></script>
+    <script src="src/effects/ifs-lsystem-lab.js"></script>
+    <script src="src/effects/fractal-flame-lab.js"></script>
+    <script src="src/effects/buddhabrot-lab.js"></script>
+    <script src="src/effects/attractor-density-lab.js"></script>
+    <script src="src/effects/flam3-density-lab.js"></script>
+    <script src="src/effects/mandelbulb-flight.js"></script>
+    <script src="src/effects/triplex-mutation-flight.js"></script>
+    <script src="src/effects/kifs-flight.js"></script>
+    <script src="src/effects/difs-tunnel-flight.js"></script>
+    <script src="src/effects/mandelbox-flight.js"></script>
+    <script src="src/effects/folded-box-variants-flight.js"></script>
+    <script src="src/effects/quaternion-julia-flight.js"></script>
+    <script src="src/effects/hypercomplex-slice-flight.js"></script>
+    <script src="src/effects/schottky-inversion-flight.js"></script>
+    <script src="src/effects/apollonian-foam-flight.js"></script>
+    <script src="src/effects/polyfold-flight.js"></script>
+    <script src="src/effects/fractal-flame-volume-flight.js"></script>
+    <script src="src/effects/strange-attractor-flight.js"></script>
+    <script src="src/effects/lsystem-tube-flight.js"></script>
+    <script src="src/effects/path-traced-fractal-flight.js"></script>
+    <script src="src/effects/kleinian.js"></script>
+    <script src="src/effects/liquid-light.js"></script>
+    <script src="src/effects/hyperbolic-tiling.js"></script>
+    <script src="src/effects/truchet-tiles.js"></script>
+    <script src="src/effects/quasicrystal.js"></script>
+    <script src="src/effects/op-art.js"></script>
+    <script src="src/effects/synthwave-grid.js"></script>
+    <script src="src/effects/glow-lab.js"></script>
+    <script src="src/effects/black-hole.js"></script>
+    <script src="src/effects/rainy-window.js"></script>
+    <script src="src/effects/aurora.js"></script>
+    <script src="src/effects/physarum.js"></script>
+    <script src="src/effects/cymatics.js"></script>
+    <script src="src/effects/nebula.js"></script>
+    <script src="src/effects/living-sun.js"></script>
+    <script src="src/effects/seascape.js"></script>
+    <script src="src/effects/polytopes.js"></script>
+    <script src="src/effects/phyllotaxis.js"></script>
+    <script src="src/effects/epicycles.js"></script>
+    <script src="src/effects/spiral-galaxy.js"></script>
+    <script src="src/effects/underwater.js"></script>
+    <script src="src/effects/liquid-chrome.js"></script>
+    <script src="src/effects/gyroid-tunnels.js"></script>
+    <script src="src/effects/soap-bubbles.js"></script>
+    <script src="src/effects/domain-colouring.js"></script>
+    <script src="src/effects/endless-terrain.js"></script>
+    <script src="src/effects/endless-scenes.js"></script>
+    <script src="src/effects/endless-sky-crystal.js"></script>
+    <script src="src/effects/robot-foundry.js"></script>
+    <script src="src/effects/fluid-ink.js"></script>
+    <script src="src/effects/lenia.js"></script>
+    <script src="src/effects/curl-silk.js"></script>
+    <script src="src/effects/hopf.js"></script>
+    <script src="src/effects/knots.js"></script>
+    <script src="src/effects/islamic-stars.js"></script>
+    <script src="src/effects/shadertoy-host.js"></script>
+
+    <!-- App Init -->
+    <script src="src/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+{
+  "shots": [
+    {
+      "file": "studio-overview.png",
+      "tab": "effect",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "render-mp4.png",
+      "tab": "output",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "fx-shuffle.png",
+      "tab": "fx",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "overlays.png",
+      "tab": "overlay",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "audio-studio.png",
+      "tab": "audio",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "beat-reactor.png",
+      "tab": "audio",
+      "focus": "[data-section=\"reactor\"]",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "beat-fine-tune.png",
+      "tab": "audio",
+      "focus": "[data-section=\"reactor-fine-tune\"]",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "parameter-links.png",
+      "tab": "audio",
+      "focus": "[data-section=\"links\"]",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "audio-source.png",
+      "tab": "audio",
+      "focus": "[data-section=\"audio-source\"]",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "music-mixer.png",
+      "tab": "audio",
+      "focus": "[data-section=\"mixer\"]",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "saved-setups.png",
+      "tab": "audio",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "timeline.png",
+      "tab": "effect",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "file": "shadertoy-lab.png",
+      "tab": "effect",
+      "focus": null,
+      "width": 1600,
+      "height": 1000
+    }
+  ],
+  "errors": []
+}

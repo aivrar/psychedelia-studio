@@ -1,0 +1,46 @@
+# Public repository allowlist. Everything else at the workspace root stays local.
+/*
+!/.gitignore
+!/.gitattributes
+!/.github/
+!/.nojekyll
+!/README.md
+!/CONTRIBUTING.md
+!/THIRD_PARTY_NOTICES.md
+!/LICENSE
+!/LICENSE.*
+!/index.html
+!/style.css
+!/src/
+!/lib/
+!/docs/
+!/tools/
+
+# Only the maintained wiki is published, not historical notes or audit reports.
+/docs/*
+!/docs/wiki/
+/docs/wiki/ui-capture-map.json
+/docs/wiki/capture-all.json
+
+# Keep executable audit/documentation tools, not their generated output.
+/tools/*
+!/tools/*.mjs
+!/tools/preview-wiki.py
+
+# Generated/private files inside allowed directories.
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.DS_Store
+Thumbs.db
+*.mp4
+*.webm
+*.wav
+*.mp3

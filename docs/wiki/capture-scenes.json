@@ -1,0 +1,264 @@
+{
+  "shots": [
+    {
+      "file": "menger-citadel.png",
+      "effect": "menger_citadel",
+      "values": {
+        "tower_height": 24,
+        "spacing": 9,
+        "altitude": 0.65,
+        "palette": 1,
+        "fog": 0.45,
+        "glow": 0.7
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "recursive-cathedral.png",
+      "effect": "recursive_cathedral",
+      "values": {
+        "palette": 2,
+        "recursion": 3,
+        "span": 6,
+        "vault_height": 18,
+        "speed": 0.8,
+        "glow": 1.3
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "fractal-canyon.png",
+      "effect": "fractal_canyon",
+      "values": {
+        "cliff_height": 22,
+        "width": 7,
+        "palette": 3,
+        "terraces": 0.25,
+        "arches": 0.4,
+        "altitude": 0.5,
+        "fog": 0.65
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "infinite-lattice.png",
+      "effect": "infinite_lattice",
+      "values": {
+        "surface": 1,
+        "cell_size": 14,
+        "palette": 1,
+        "thickness": 0.1,
+        "glow": 0.8,
+        "fog": 0.35,
+        "detail": 190
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "crystal-geode.png",
+      "effect": "crystal_geode",
+      "values": {
+        "formation": 1,
+        "palette": 5,
+        "iridescence": 1,
+        "color_spread": 1.4,
+        "glow": 1.15,
+        "density": 14
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "golden-hour-clouds.png",
+      "effect": "golden_hour_clouds",
+      "values": {
+        "weather": 2,
+        "palette": 4,
+        "coverage": 0.6,
+        "density": 1.2,
+        "cloud_height": 58,
+        "altitude": 1.7,
+        "look_down": 0.8,
+        "sun_height": 0.16,
+        "sun_angle": -0.65,
+        "open_sky": 20,
+        "silver_lining": 1.4
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "planet-sunrise.png",
+      "effect": "planet_sunrise",
+      "values": {
+        "world": 1,
+        "palette": 7,
+        "saturation": 1.35,
+        "ring_bands": 1,
+        "ring_width": 1.4,
+        "atmosphere": 5,
+        "glow": 1.2
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "robot-foundry.png",
+      "effect": "robot_foundry",
+      "values": {
+        "world_style": 1,
+        "palette": 2,
+        "choreography": 1,
+        "glow": 0.95,
+        "ensemble_sync": 0.95,
+        "factory_height": 24
+      },
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "mandelbulb-flight.png",
+      "effect": "mandelbulb_flight",
+      "values": {},
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "kaleidoscope.png",
+      "effect": "kaleidoscope",
+      "values": {},
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "nebula.png",
+      "effect": "nebula",
+      "values": {},
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "liquid-chrome.png",
+      "effect": "liquid_chrome",
+      "values": {},
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    },
+    {
+      "file": "glow-lab.png",
+      "effect": "glow_lab",
+      "values": {},
+      "time": 8,
+      "width": 1280,
+      "height": 720,
+      "seed": 0,
+      "seedVector": [
+        0.31,
+        0.61,
+        0.83,
+        0.21
+      ]
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,223 @@
+/* Psychedelia - GPU simulation helpers (WebGL2)
+ * A small shared toolkit for the simulation effects (Fluid Ink, Lenia,
+ * Curl-Noise Silk): programs with their uniform locations, float textures
+ * and render targets, ping-pong pairs, a full-screen quad, point drawing.
+ * Effects call render passes into these targets and finish with
+ * Renderer.bindFramebuffer(-1) for the display pass, as usual.
+ */
+var GpuSim = (function() {
+    'use strict';
+
+    var VS_QUAD = '#version 300 es\nin vec2 a_pos;\nout vec2 v_uv;\n' +
+        'void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }';
+    var quads = [];   // one quad buffer per GL context
+
+    function supported(gl) {
+        var isGL2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+        return !!(isGL2 && gl.getExtension('EXT_color_buffer_float'));
+    }
+
+    function compile(gl, type, src, label) {
+        var sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+            console.error((label || 'GpuSim') + ' shader:', gl.getShaderInfoLog(sh));
+            gl.deleteShader(sh);
+            return null;
+        }
+        return sh;
+    }
+
+    // { p, u: {uniform: location}, a: {attribute: location} }
+    function program(gl, vs, fs, label) {
+        var v = compile(gl, gl.VERTEX_SHADER, vs || VS_QUAD, label);
+        var f = compile(gl, gl.FRAGMENT_SHADER, fs, label);
+        if (!v || !f) return null;
+        var p = gl.createProgram();
+        gl.attachShader(p, v);
+        gl.attachShader(p, f);
+        gl.linkProgram(p);
+        gl.deleteShader(v);
+        gl.deleteShader(f);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+            console.error((label || 'GpuSim') + ' link:', gl.getProgramInfoLog(p));
+            gl.deleteProgram(p);
+            return null;
+        }
+        var u = {}, a = {};
+        var n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+        for (var i = 0; i < n; i++) {
+            var info = gl.getActiveUniform(p, i);
+            u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name);
+        }
+        var na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
+        for (var j = 0; j < na; j++) {
+            var ai = gl.getActiveAttrib(p, j);
+            a[ai.name] = gl.getAttribLocation(p, ai.name);
+        }
+        return { p: p, u: u, a: a };
+    }
+
+    // Compiled once per session and kept across effect switches (heavy loops
+    // can take a while to compile on Windows). Rebuilt if the context was lost.
+    var cache = [];
+    function cached(gl, key, vs, fs) {
+        for (var i = 0; i < cache.length; i++) {
+            var e = cache[i];
+            if (e.gl === gl && e.key === key) {
+                if (gl.isProgram(e.prog.p)) return e.prog;
+                cache.splice(i, 1);
+                break;
+            }
+        }
+        var p = program(gl, vs, fs, key);
+        if (p) cache.push({ gl: gl, key: key, prog: p });
+        return p;
+    }
+
+    // opts: { internal, format, type, filter, wrap, data }
+    function texture(gl, w, h, opts) {
+        opts = opts || {};
+        var t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.texImage2D(gl.TEXTURE_2D, 0, opts.internal || gl.RGBA16F, w, h, 0, opts.format || gl.RGBA,
+            opts.type || gl.HALF_FLOAT, opts.data || null);
+        var filter = opts.filter || gl.LINEAR, wrap = opts.wrap || gl.CLAMP_TO_EDGE;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        return t;
+    }
+
+    // A texture with its framebuffer: { tex, fb, w, h }, or null if not renderable.
+    function target(gl, w, h, opts) {
+        var tex = texture(gl, w, h, opts);
+        var fb = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        var ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        if (ok) { gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        if (!ok) { gl.deleteFramebuffer(fb); gl.deleteTexture(tex); return null; }
+        return { tex: tex, fb: fb, w: w, h: h };
+    }
+
+    // Two targets to read from one and write the other: { read, write, swap() }
+    function pair(gl, w, h, opts) {
+        var a = target(gl, w, h, opts), b = target(gl, w, h, opts);
+        if (!a || !b) { release(gl, [a, b]); return null; }
+        var pr = { read: a, write: b, w: w, h: h };
+        pr.swap = function() { var t = pr.read; pr.read = pr.write; pr.write = t; };
+        return pr;
+    }
+
+    function quadBuffer(gl) {
+        for (var i = 0; i < quads.length; i++) if (quads[i].gl === gl) return quads[i].buf;
+        var buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+        quads.push({ gl: gl, buf: buf });
+        return buf;
+    }
+
+    // Draw a full-screen quad into t (a target; null = whatever is bound).
+    function draw(gl, prog, t) {
+        if (t) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
+            gl.viewport(0, 0, t.w, t.h);
+        }
+        var loc = prog.a.a_pos;
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer(gl));
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.disableVertexAttribArray(loc);
+    }
+
+    // Draw count points; the vertex shader uses gl_VertexID (no attributes needed).
+    function points(gl, count, t) {
+        if (t) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
+            gl.viewport(0, 0, t.w, t.h);
+        }
+        gl.drawArrays(gl.POINTS, 0, count);
+    }
+
+    function bind(gl, unit, tex, loc) {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        if (loc) gl.uniform1i(loc, unit);
+    }
+
+    function unbind(gl, units) {
+        for (var i = units - 1; i >= 0; i--) {
+            gl.activeTexture(gl.TEXTURE0 + i);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+    }
+
+    function clear(gl, t, r, g, b, a) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
+        gl.viewport(0, 0, t.w, t.h);
+        gl.clearColor(r || 0, g || 0, b || 0, a || 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+
+    // Deletes targets, pairs and programs (any mix, nulls ignored).
+    function release(gl, list) {
+        if (!gl) return;
+        (list || []).forEach(function(x) {
+            if (!x) return;
+            if (x.read && x.write) { release(gl, [x.read, x.write]); return; }
+            if (x.fb) gl.deleteFramebuffer(x.fb);
+            if (x.tex) gl.deleteTexture(x.tex);
+            if (x.p) gl.deleteProgram(x.p);
+        });
+    }
+
+    function audio(id) {
+        return typeof AudioReactor !== 'undefined' && AudioReactor.getSource ? AudioReactor.getSource(id) : 0;
+    }
+
+    // Shared palette lookup for the display passes: native schemes first, then
+    // the palette library (bound as a texture).
+    function bindPalette(gl, unit, index, natives, locLut, locUse) {
+        var useLut = index >= natives && typeof PsyPalettes !== 'undefined';
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, useLut ? PsyPalettes.texture(gl, index - natives) : null);
+        if (locLut) gl.uniform1i(locLut, unit);
+        if (locUse) gl.uniform1f(locUse, useLut ? 1 : 0);
+        return useLut;
+    }
+
+    // Fallback when WebGL2 float targets are missing: a dark frame.
+    function unsupportedFrame(gl, name, state) {
+        if (!state.warned) { state.warned = true; console.warn(name + ' needs WebGL2 with float render targets.'); }
+        Renderer.bindFramebuffer(-1);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.clearColor(0.02, 0.01, 0.04, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+
+    return {
+        VS_QUAD: VS_QUAD,
+        supported: supported,
+        program: program,
+        cached: cached,
+        texture: texture,
+        target: target,
+        pair: pair,
+        draw: draw,
+        points: points,
+        bind: bind,
+        unbind: unbind,
+        clear: clear,
+        release: release,
+        audio: audio,
+        bindPalette: bindPalette,
+        unsupportedFrame: unsupportedFrame
+    };
+})();
