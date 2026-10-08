@@ -2,7 +2,7 @@
 
 The **Audio** tab brings together local setups, generated music, source selection, the Beat Reactor, and effect parameter links. Selecting an analysis source and starting its playback are separate actions.
 
-![Studio music controls](images/audio-studio.png)
+![Studio music controls](images/audio-studio-clouds.png)
 
 ## Audio sources
 
@@ -33,7 +33,7 @@ Press **Play** to start. **New** creates another musical take and can change key
 
 Open **Mixer** for the eight instrument channels: Kick, Snare, Hi-Hat, Perc, Bass, Chords, Arpeggio, and Lead. Each has an on/off control and level. The sound label shows the instrument voice selected by the current musical configuration.
 
-![Studio mixer](images/music-mixer.png)
+![Studio mixer](images/music-mixer-chrome.png)
 
 Mixer choices matter to the Beat Reactor. A muted drum should not keep issuing the same Studio hit strength as an audible drum. If an expected reaction is absent, inspect both the instrument switch and its level before increasing sensitivity.
 
@@ -47,7 +47,7 @@ Mixer choices matter to the Beat Reactor. A muted drum should not keep issuing t
 
 Gain runs from 0 to 2. Zero gain is intentionally silent and does not represent a broken input. Replace the file with Choose or remove it with Clear. File decoding depends on the browser's supported audio formats; a common WAV or MP3 is a useful diagnostic alternative.
 
-![Audio source and file controls](images/audio-source.png)
+![Audio source and file controls](images/audio-source-planet.png)
 
 **Match full audio track** renders from the beginning of the uploaded file. **Remaining audio** starts at the current file playhead. **Custom duration** with Audio File selected also starts at that playhead and honors the loop setting. Full and remaining modes ignore file looping. See [Rendering and Recording](Rendering-and-Recording.md).
 

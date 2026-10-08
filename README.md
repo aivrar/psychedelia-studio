@@ -33,7 +33,7 @@ Opening `index.html` directly also works for the core app and has been tested. A
 
 ## Inside the studio
 
-![Psychedelia Studio interface showing Robot Foundry and effect controls](docs/wiki/images/studio-overview.png)
+![Psychedelia Studio interface showing Mandelbulb Flight and effect controls](docs/wiki/images/studio-overview-mandelbulb.png)
 
 - **Explore:** fractal flights, mathematical patterns, fluid simulations, cosmic scenes, and eight scenes in the Endless Scenes category, including an industrial world of dancing robots.
 - **Shape the look:** native palettes plus a shared palette library, effect-specific parameters, starter presets, post-processing, image/text overlays, and global motion controls.

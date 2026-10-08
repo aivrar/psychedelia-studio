@@ -24,7 +24,7 @@ Use a desktop browser with WebGL and hardware acceleration. Chrome/Edge are the 
 4. Adjust one or two structural controls, then the scene's speed. Use **Undo** to compare a change.
 5. If the entire view rotates or pulses, check **Global Motion & View** and **Audio → Beat Reactor → Fine Tune**.
 
-![Robot Foundry in the Effect tab](images/studio-overview.png)
+![Mandelbulb Flight in the Effect tab](images/studio-overview-mandelbulb.png)
 
 ## Add music
 

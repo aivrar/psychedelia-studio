@@ -1,6 +1,6 @@
 # Interface Guide
 
-![Main workspace with Robot Foundry](images/studio-overview.png)
+![Main workspace with Mandelbulb Flight](images/studio-overview-mandelbulb.png)
 
 The large preview shows the composed scene. The top toolbar handles transport and common actions. The right sidebar has five tabs; each keeps related controls together and can be scrolled independently.
 

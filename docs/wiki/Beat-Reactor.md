@@ -2,7 +2,7 @@
 
 Beat Reactor converts sound into continuous bands, hit pulses, tempo, and musical modulation. It can add global movement or drive individual effect, FX, and overlay controls.
 
-![Beat Reactor controls](images/beat-reactor.png)
+![Beat Reactor controls](images/beat-reactor-nebula.png)
 
 ## Understand the independent routes
 
@@ -35,7 +35,7 @@ Each amount is 0–100%. Zero disables that global reaction. Style presets set t
 
 ## Fine Tune
 
-![Fine Tune amounts and timing controls](images/beat-fine-tune.png)
+![Fine Tune amounts and timing controls](images/beat-fine-tune-nebula.png)
 
 | Control | Range | Default | When to change it |
 | --- | --- | --- | --- |
@@ -74,7 +74,7 @@ Studio beat timing is exact from the sequencer. External tempo can be estimated,
 
 ## Per-effect parameter links
 
-![Effect parameter links](images/parameter-links.png)
+![Effect parameter links](images/parameter-links-geode.png)
 
 There are three link rows. Choose a destination parameter, a source, and a signed amount. Positive amounts push in one direction and negative amounts in the other. Zero leaves the destination unchanged. Modulation is bounded by the parameter's valid range; extreme base values can leave little room to move.
 

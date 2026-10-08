@@ -2,7 +2,7 @@
 
 **Use Render MP4 for a finished video with every requested frame. Use Live recording for a performance you are changing as it happens.** Both workflows are available.
 
-![Render MP4 and output settings](images/render-mp4.png)
+![Render MP4 and output settings](images/render-mp4-cathedral.png)
 
 ## Choose a workflow
 

@@ -4,7 +4,7 @@
 
 Open **Audio → Saved Setups**. Enter a name and press **Save**. Choose an existing entry and press **Load** to restore it. Saving with an existing name updates that saved entry. **Delete saved** removes the named entry while leaving the current scene available.
 
-![Saved Setups with Copper Parade](images/saved-setups.png)
+![Saved Setups with Glacial Megacity](images/saved-setups-citadel.png)
 
 There can be up to **50 named setups**, with names up to **80 characters**. Storage is local to this browser profile and origin. The app also autosaves the latest working setup, so named saves are best used as intentional milestones.
 

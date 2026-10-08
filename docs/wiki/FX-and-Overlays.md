@@ -4,7 +4,7 @@
 
 ## Post FX
 
-![FX browser and shuffle controls](images/fx-shuffle.png)
+![FX browser and shuffle controls](images/fx-shuffle-wormhole.png)
 
 The current library has **39 effects**, grouped into Distort, Feedback, Colour, Stylize, Glow & Blur, and Lens & Retro. Enable a pass, open its controls, and start with a small amount or mix where available. Several strong passes can compound.
 
@@ -16,7 +16,7 @@ The [Post FX Reference](Post-FX-Reference.md) lists every pass, default, valid r
 
 ## Overlays
 
-![Overlay controls](images/overlays.png)
+![Overlay controls](images/overlays-kaleidoscope.png)
 
 The **22 overlays** are grouped into Light Show, Shapes, Atmosphere, and Audio & Text. They include light/strobe accents, lasers, stage effects, particles, graphical shapes, spectrum displays, text, and image layers.
 

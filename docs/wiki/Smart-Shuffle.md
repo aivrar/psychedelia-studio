@@ -2,7 +2,7 @@
 
 Shuffle can vary **FX**, **Overlays**, and **Beat Reactor** independently. Each scope has a style and an auto-shuffle schedule. Choose how much freedom a shuffle has before scheduling it.
 
-![Shuffle style and timing in the FX tab](images/fx-shuffle.png)
+![Shuffle style and timing in the FX tab](images/fx-shuffle-wormhole.png)
 
 ## Preserve scene or Wild
 

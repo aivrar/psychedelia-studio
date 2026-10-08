@@ -341,7 +341,8 @@ async function run() {
             await wait(550);
             const shot = await cdp.send('Page.captureScreenshot', {format:'png',fromSurface:true});
             await writeFile(join(destination,'images',file),Buffer.from(shot.data,'base64'));
-            shots.push({file,tab,focus:focus || null,width:1600,height:1000});
+            const state=await evaluate(cdp, `({effect:EffectRegistry.getCurrent().name,values:Controls.getBaseValues()})`);
+            shots.push({file,tab,focus:focus || null,width:1600,height:1000,...state});
             console.log('Captured ' + file);
         }
         if (mode === 'all' || mode === 'scenes') {
@@ -360,20 +361,31 @@ async function run() {
             await canvas('hero.png', selectedScene || 'glow_lab', {mode:2,palette:15,glow:1.5,twist:1.3,detail:90}, 8, 2560, 1440);
         }
         if (mode === 'all' || mode === 'panels') {
-            await scene('robot_foundry', {}, 8);
-            await panel('studio-overview.png','effect');
-            await panel('render-mp4.png','output');
-            await panel('fx-shuffle.png','fx');
-            await panel('overlays.png','overlay');
-            await panel('audio-studio.png','audio');
+            const preset=(name,index)=>inventory.effects.find(e=>e.name===name).fractalFlight.smokePresets[index].values;
+            await scene('mandelbulb_flight', {palette:1,glow:1.15}, 8);
+            await panel('studio-overview-mandelbulb.png','effect');
+            await scene('recursive_cathedral',preset('recursive_cathedral',2),8);
+            await panel('render-mp4-cathedral.png','output');
+            await scene('glow_lab',{mode:2,palette:15,glow:1.5,twist:1.3,detail:90},8);
+            await panel('fx-shuffle-wormhole.png','fx');
+            await scene('kaleidoscope',{palette:1},8);
+            await panel('overlays-kaleidoscope.png','overlay');
+            await scene('golden_hour_clouds',preset('golden_hour_clouds',3),8);
+            await panel('audio-studio-clouds.png','audio');
+            await scene('nebula',{},8);
             await evaluate(cdp, `AudioReactor.applyPreset('club'); AudioReactor.set('enabled',true); AudioReactor.suggestLinks(); document.getElementById('reactorPreset').value='club'; document.getElementById('reactorPreset').dispatchEvent(new Event('change',{bubbles:true}));`);
-            await panel('beat-reactor.png','audio','[data-section="reactor"]');
-            await panel('beat-fine-tune.png','audio','[data-section="reactor-fine-tune"]');
-            await panel('parameter-links.png','audio','[data-section="links"]');
-            await panel('audio-source.png','audio','[data-section="audio-source"]');
-            await panel('music-mixer.png','audio','[data-section="mixer"]');
-            await evaluate(cdp, `Setups.save('Copper Parade')`);
-            await panel('saved-setups.png','audio');
+            await panel('beat-reactor-nebula.png','audio','[data-section="reactor"]');
+            await panel('beat-fine-tune-nebula.png','audio','[data-section="reactor-fine-tune"]');
+            await scene('crystal_geode',preset('crystal_geode',5),8);
+            await evaluate(cdp,'AudioReactor.suggestLinks()');
+            await panel('parameter-links-geode.png','audio','[data-section="links"]');
+            await scene('planet_sunrise',preset('planet_sunrise',5),8);
+            await panel('audio-source-planet.png','audio','[data-section="audio-source"]');
+            await scene('liquid_chrome',{},8);
+            await panel('music-mixer-chrome.png','audio','[data-section="mixer"]');
+            await scene('menger_citadel',preset('menger_citadel',1),8);
+            await evaluate(cdp, `Setups.save('Glacial Megacity')`);
+            await panel('saved-setups-citadel.png','audio');
             await scene('menger_citadel',{palette:2},8);
             await evaluate(cdp, `Timeline.addCurrentAsClip()`);
             await scene('crystal_geode',{},8);

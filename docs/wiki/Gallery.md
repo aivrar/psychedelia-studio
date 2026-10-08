@@ -39,21 +39,21 @@ The five additional scene samples above use their default base controls at the s
 
 ## Interface screenshots
 
-All interface captures use a **1600×1000** viewport. Click an image link for full size.
+All interface captures use a **1600×1000** viewport. The examples vary across Mandelbulb Flight, Recursive Cathedral, Glow Lab, Kaleidoscope, Golden Hour Clouds, Nebula, Crystal Geode, Planet Sunrise, Liquid Chrome, and Menger Citadel. Click an image link for full size.
 
 | Workflow | Image |
 | --- | --- |
-| Main workspace and effect controls | [Studio overview](images/studio-overview.png) |
-| Dedicated MP4 render and output settings | [Render MP4](images/render-mp4.png) |
-| FX browser and shuffle controls | [FX shuffle](images/fx-shuffle.png) |
-| Overlay browser | [Overlays](images/overlays.png) |
-| Studio Music | [Audio studio](images/audio-studio.png) |
-| Mixer | [Music mixer](images/music-mixer.png) |
-| Audio Source | [Source controls](images/audio-source.png) |
-| Beat Reactor | [Global style and meters](images/beat-reactor.png) |
-| Fine Tune | [Reaction and timing controls](images/beat-fine-tune.png) |
-| Effect links | [Parameter links](images/parameter-links.png) |
-| Named setup | [Saved setups](images/saved-setups.png) |
+| Main workspace and effect controls | [Studio overview](images/studio-overview-mandelbulb.png) |
+| Dedicated MP4 render and output settings | [Render MP4](images/render-mp4-cathedral.png) |
+| FX browser and shuffle controls | [FX shuffle](images/fx-shuffle-wormhole.png) |
+| Overlay browser | [Overlays](images/overlays-kaleidoscope.png) |
+| Studio Music | [Audio studio](images/audio-studio-clouds.png) |
+| Mixer | [Music mixer](images/music-mixer-chrome.png) |
+| Audio Source | [Source controls](images/audio-source-planet.png) |
+| Beat Reactor | [Global style and meters](images/beat-reactor-nebula.png) |
+| Fine Tune | [Reaction and timing controls](images/beat-fine-tune-nebula.png) |
+| Effect links | [Parameter links](images/parameter-links-geode.png) |
+| Named setup | [Saved setups](images/saved-setups-citadel.png) |
 | Timeline sequencing | [Timeline](images/timeline.png) |
 | Embedded shader editor | [Shadertoy Lab](images/shadertoy-lab.png) |
 
