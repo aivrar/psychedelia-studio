@@ -12,7 +12,7 @@ Create music visualizer videos, VJ loops, animated backgrounds, and generative a
 
 [**Launch Psychedelia Studio →**](https://aivrar.github.io/psychedelia-studio/)
 
-[Start here](docs/wiki/Quick-Start.md) · [Full documentation](docs/wiki/Home.md) · [Effect catalog](docs/wiki/Effect-Catalog.md) · [Render a 60 FPS MP4](docs/wiki/Rendering-and-Recording.md) · [Screenshot gallery](docs/wiki/Gallery.md)
+[Start here](docs/wiki/Quick-Start.md) · [Full wiki](https://github.com/aivrar/psychedelia-studio/wiki) · [Effect catalog](docs/wiki/Effect-Catalog.md) · [Render a 60 FPS MP4](docs/wiki/Rendering-and-Recording.md) · [Screenshot gallery](docs/wiki/Gallery.md)
 
 ## Make something
 

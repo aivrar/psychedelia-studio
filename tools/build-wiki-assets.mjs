@@ -216,7 +216,7 @@ async function run() {
     let cdp;
     try {
         await waitForJson('http://' + host + ':' + debugPort + '/json/version', Date.now() + timeoutMs);
-        cdp = await createPage(url);
+        cdp = await createPage(mode === 'live' ? 'https://aivrar.github.io/psychedelia-studio/' : url);
         await cdp.send('Runtime.enable');
         await cdp.send('Page.enable');
         await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -226,6 +226,23 @@ async function run() {
             await wait(150);
         }
         await evaluate(cdp, `window.__psySyncSwitch = true`);
+        if (mode === 'live') {
+            const report=await evaluate(cdp, `({url:location.href,title:document.title,
+                effects:EffectRegistry.getList().length,fx:PostProcess.getEffects().length,
+                overlays:Overlays.getDefs().length,palettes:PsyPalettes.count,
+                renderer:document.getElementById('gpuBadge').textContent,
+                description:document.querySelector('meta[name="description"]')?.content,
+                image:document.querySelector('meta[property="og:image"]')?.content,
+                appReady:EditHistory.getState().ready})`);
+            report.errors=cdp.console.filter(e=>e.type==='error'||e.type==='exception');
+            const out=join(rootDir,'.wiki-preview');await mkdir(out,{recursive:true});
+            const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true});
+            await writeFile(join(out,'live-app.png'),Buffer.from(shot.data,'base64'));
+            await writeFile(join(out,'live-app.json'),JSON.stringify(report,null,2));
+            console.log(JSON.stringify(report));
+            if(!report.appReady||report.effects!==104||report.fx!==39||report.errors.length)throw new Error('Published app verification failed');
+            return;
+        }
         const inventory = await evaluate(cdp, `({
             effects: EffectRegistry.getList().map(e => { const d = EffectRegistry.getDefinition(e.name); return {
                 name:d.name, label:d.label, category:d.category, description:d.description,

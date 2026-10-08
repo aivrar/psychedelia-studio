@@ -2,6 +2,8 @@
 
 ## Run the app
 
+[Open the live studio](https://aivrar.github.io/psychedelia-studio/) to try it immediately. To run a local copy, follow the steps below.
+
 Download the repository and keep its folder structure intact. The main app is a static website: `index.html` loads the scripts in `src/` and the bundled Tone.js library in `lib/`. There is no installation or build step for the app itself.
 
 For a consistent local address, open a terminal in the project folder and run:

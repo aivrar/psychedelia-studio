@@ -1,6 +1,6 @@
 # Publishing
 
-The intended repository is **`aivrar/psychedelia-studio`**, with the display name **Psychedelia Studio**. This package prepares files locally; it does not create a repository or publish anything by itself.
+The repository is [aivrar/psychedelia-studio](https://github.com/aivrar/psychedelia-studio), with the display name **Psychedelia Studio**. The [live studio](https://aivrar.github.io/psychedelia-studio/) is served by GitHub Pages from the main branch. The local wiki export helper prepares files; it does not commit or publish them automatically.
 
 ## Repository contents
 
@@ -21,9 +21,17 @@ node tools/check-wiki.mjs
 node --test tools/beat-reactor.test.mjs tools/core-regression.test.mjs tools/shuffle.test.mjs
 ```
 
-Create the main repository with the intended name when ready. Review Git identity and authentication in your normal Git client; no login identifier or credential belongs in the README or wiki. The public project attribution is **aivrar**.
+Review Git identity and authentication in your normal Git client before publishing updates; no login identifier or credential belongs in the README or wiki. The public project attribution is **aivrar**.
 
-The repository README uses relative documentation and image links, so it works before the separate Wiki is populated. No hosted demo URL is advertised until a deployment actually exists.
+The repository README uses relative documentation and image links and also links to the live app and published Wiki. `.nojekyll` keeps the Pages deployment a static app without processing its source as a Jekyll site.
+
+## Presentation and discovery
+
+The repository description and topics emphasize music visualizers, animation creation, fractal art, VJ loops, motion graphics, and animated backgrounds. Update those when the product's capabilities change; avoid unrelated topics.
+
+The live app provides search-description and Open Graph/Twitter sharing metadata. `.github/social-preview.jpg` is a 1280×640 branded card built from an actual studio render. Recreate it with `node tools/build-wiki-assets.mjs social`.
+
+For GitHub's own repository link preview, open repository **Settings → General → Social preview → Edit → Upload an image** and choose that JPEG. The image must be set through GitHub's settings separately from the app's metadata. See [GitHub's social preview instructions](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview).
 
 ## Prepare the GitHub Wiki
 

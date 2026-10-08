@@ -4,6 +4,8 @@
 
 Psychedelia Studio is a browser-based workspace for procedural visuals and music. Explore an effect, shape its palette and motion, connect it to sound, and record or render a finished video.
 
+[**Launch Psychedelia Studio →**](https://aivrar.github.io/psychedelia-studio/) · [GitHub repository](https://github.com/aivrar/psychedelia-studio)
+
 This wiki documents the app as inspected on **October 7, 2026**: **104 effects, 39 Post FX, 22 overlays, and 71 shared palettes**, in addition to effect-native palettes. Screenshots show actual app output. The effect tables are generated from the registered definitions, not a separate feature wish list.
 
 ## Start with a result
