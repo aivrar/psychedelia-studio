@@ -18,4 +18,4 @@ Shadertoy API imports can carry author, source URL, and license metadata. Keep t
 
 ## Application and documentation
 
-The project-wide application license has not been selected. The dependency license above does not grant a license for the rest of Psychedelia Studio. The documentation's showcase images were captured from the app's built-in scenes; their recipes are listed in the [gallery](docs/wiki/Gallery.md).
+Psychedelia Studio's own application code and documentation are released under the MIT License (see [LICENSE](LICENSE)). Third-party dependencies, imported shaders, and media keep their own terms as described above. The documentation's showcase images were captured from the app's built-in scenes; their recipes are listed in the [gallery](docs/wiki/Gallery.md).
