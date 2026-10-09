@@ -69,4 +69,4 @@ Browser tooling uses an installed Chrome or Edge; set `BROWSER` to its executabl
 
 ## Credits and license status
 
-Project by **[aivrar](https://github.com/aivrar)**. See [Third-party notices](THIRD_PARTY_NOTICES.md) for bundled dependencies and shader attribution notes. A project-wide license has not yet been selected; this README does not grant a new license. Imported shaders and media retain their own rights and terms.
+Project by **[aivrar](https://github.com/aivrar)**. See [Third-party notices](THIRD_PARTY_NOTICES.md) for bundled dependencies and shader attribution notes. Psychedelia Studio's own code is released under the [MIT License](LICENSE). Imported shaders and media retain their own rights and terms.
