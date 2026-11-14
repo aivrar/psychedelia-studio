@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: git ls-files '*.js' '*.mjs' | xargs -n 1 node --check
+      - name: Unit tests
+        run: npm test
+      - name: Wiki links and counts
+        run: npm run check:wiki

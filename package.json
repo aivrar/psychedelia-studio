@@ -1,0 +1,13 @@
+{
+  "name": "psychedelia-studio",
+  "private": true,
+  "description": "Browser visual-effects studio. The app needs no build step; Node is only used for the development checks below.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tools/*.test.mjs\"",
+    "check:wiki": "node tools/check-wiki.mjs"
+  }
+}

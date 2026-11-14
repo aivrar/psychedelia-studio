@@ -11,6 +11,9 @@
 .gitignore text eol=lf
 .gitattributes text eol=lf
 .nojekyll text eol=lf
+LICENSE text eol=lf
+lib/** linguist-vendored
+docs/** linguist-documentation
 *.svg text eol=lf
 *.png binary
 *.jpg binary

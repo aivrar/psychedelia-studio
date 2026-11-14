@@ -9,6 +9,7 @@
 !/THIRD_PARTY_NOTICES.md
 !/LICENSE
 !/LICENSE.*
+!/package.json
 !/index.html
 !/style.css
 !/src/
