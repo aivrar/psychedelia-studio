@@ -245,7 +245,7 @@ void main() {
     }
     if(hit) {
         vec3 p=ro+rd*t, n=rfNormal(p,0.002+t*0.0004);
-        float facing=max(dot(n,-rd),0.0), diffuse=max(dot(n,sun),0.0);
+        float facing=clamp(dot(n,-rd),0.0,1.0), diffuse=max(dot(n,sun),0.0);
         float tone=esTone(p,n,material);
         vec3 base=mix(esPalette(tone),vec3(0.38,0.43,0.49),0.16);
         if(material<3.5) {

@@ -171,6 +171,9 @@ var VideoExport = (function() {
     function hwKey(w, h, fps) { return w + 'x' + h + '@' + fps + ':' + options.quality; }
     function checkHardware(w, h, fps) {
         var key = hwKey(w, h, fps);
+        // Both settings configure() may use, so the one it picks is known in time.
+        probeEncoderConfig(encoderConfig(w, h, fps, 'no-preference'));
+        probeEncoderConfig(encoderConfig(w, h, fps, 'prefer-hardware'));
         if (key in hwCache || typeof VideoEncoder === 'undefined') return Promise.resolve(false);
         var bitrate = videoBitrate(w, h, fps, options.quality);
         hwCache[key] = undefined;
@@ -179,6 +182,42 @@ var VideoExport = (function() {
             hardwareAcceleration: 'prefer-hardware', avc: { format: 'avc' }
         }).then(function(r) { hwCache[key] = !!r.supported; return true; })
           .catch(function() { hwCache[key] = null; return false; });
+    }
+
+    // The H.264 settings a WebCodecs recording configures its encoder with.
+    function encoderConfig(w, h, fps, acceleration) {
+        var bitrate = videoBitrate(w, h, fps, options.quality);
+        return {
+            codec: 'avc1.6400' + avcLevel(w, h, fps, bitrate), width: w, height: h, bitrate: bitrate, framerate: fps,
+            hardwareAcceleration: acceleration,
+            bitrateMode: 'variable', latencyMode: 'quality', avc: { format: 'avc' }
+        };
+    }
+
+    // configure() reports settings the encoder cannot take only later, through
+    // its error callback, after the recording has started. So they are checked
+    // ahead (cached per exact configuration) and a refused configuration
+    // records with MediaRecorder instead. Unknown answers keep the old behaviour.
+    function encoderAcceleration(w, h, fps) { return hwCache[hwKey(w, h, fps)] === true ? 'prefer-hardware' : 'no-preference'; }
+    var cfgCache = {};
+    function configKey(cfg) {
+        return [cfg.codec, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.bitrateMode, cfg.latencyMode, cfg.hardwareAcceleration, cfg.avc && cfg.avc.format].join('|');
+    }
+    function probeEncoderConfig(cfg) {
+        var key = configKey(cfg);
+        if (key in cfgCache || typeof VideoEncoder === 'undefined' || !VideoEncoder.isConfigSupported) return;
+        cfgCache[key] = undefined;
+        try {
+            VideoEncoder.isConfigSupported(cfg)
+                .then(function(r) { cfgCache[key] = !!(r && r.supported); })
+                .catch(function() { cfgCache[key] = null; });
+        } catch (err) { cfgCache[key] = null; }
+    }
+    // True only when the encoder has refused the exact configuration configure() would get.
+    function encoderRefuses(w, h, fps) {
+        var cfg = encoderConfig(w, h, fps, encoderAcceleration(w, h, fps));
+        probeEncoderConfig(cfg);   // not asked yet: ask now for the next attempt
+        return cfgCache[configKey(cfg)] === false;
     }
 
     // extra: text placed before any warning (the app adds the recording length).
@@ -373,6 +412,39 @@ var VideoExport = (function() {
     // recording lifts it (into a limiter) to a normal video level.
     var MUSIC_RECORD_GAIN = 3.2;   // about +10 dB
 
+    // The limiter lets loud mixes (and its own make-up gain) through slightly
+    // above full scale, which players clip. This curve leaves everything below
+    // -1.2 dBFS untouched and bends the rest smoothly under -0.6 dBFS.
+    var ceilingCurve = null;
+    function recordCeilingCurve() {
+        if (ceilingCurve) return ceilingCurve;
+        var n = 8193, knee = 0.87, room = 0.07;
+        ceilingCurve = new Float32Array(n);
+        for (var i = 0; i < n; i++) {
+            var x = i / (n - 1) * 2 - 1, a = Math.abs(x);
+            ceilingCurve[i] = a <= knee ? x : (x < 0 ? -1 : 1) * (knee + room * Math.tanh((a - knee) / room));
+        }
+        return ceilingCurve;
+    }
+
+    // Recording mix stage: limiter then ceiling, with the studio music lifted
+    // first. Shared with the offline render so both come out at the same level.
+    function buildRecordMix(ctx) {
+        var limiter = ctx.createDynamicsCompressor();
+        limiter.threshold.value = -1.5;
+        limiter.knee.value = 0;
+        limiter.ratio.value = 20;
+        limiter.attack.value = 0.003;
+        limiter.release.value = 0.15;
+        var ceiling = ctx.createWaveShaper();
+        ceiling.curve = recordCeilingCurve();
+        limiter.connect(ceiling);
+        var musicGain = ctx.createGain();
+        musicGain.gain.value = MUSIC_RECORD_GAIN;
+        musicGain.connect(limiter);
+        return { input: limiter, music: musicGain, output: ceiling };
+    }
+
     // One audio track for the recording, from a small mixer that runs from the
     // moment REC is pressed. It always delivers sound frames (silence until
     // something plays), so the audio starts with the video and stays in sync,
@@ -392,16 +464,8 @@ var VideoExport = (function() {
         // AAC only takes 44.1 or 48 kHz, whatever rate the sound card runs at.
         try { ctx = new AudioCtx({ sampleRate: 48000 }); } catch (err2) { ctx = new AudioCtx(); }
         var dest = ctx.createMediaStreamDestination();
-        var limiter = ctx.createDynamicsCompressor();
-        limiter.threshold.value = -1.5;
-        limiter.knee.value = 0;
-        limiter.ratio.value = 20;
-        limiter.attack.value = 0.003;
-        limiter.release.value = 0.15;
-        limiter.connect(dest);
-        var musicGain = ctx.createGain();
-        musicGain.gain.value = MUSIC_RECORD_GAIN;
-        musicGain.connect(limiter);
+        var stage = buildRecordMix(ctx), limiter = stage.input, ceiling = stage.output, musicGain = stage.music;
+        ceiling.connect(dest);
         // A running source keeps the mixer producing frames while nothing plays.
         var keepAlive = ctx.createConstantSource();
         keepAlive.offset.value = 0;
@@ -418,7 +482,7 @@ var VideoExport = (function() {
                 var node = new AudioWorkletNode(ctx, 'psy-record-tap', {
                     numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit'
                 });
-                limiter.connect(node);
+                ceiling.connect(node);
                 var mute = ctx.createGain();
                 mute.gain.value = 0;
                 node.connect(mute);
@@ -684,12 +748,9 @@ var VideoExport = (function() {
             output: function(chunk, meta) { session.writer.addVideo(chunk, meta); },
             error: function(e) { if (wc === session) failRecording('Video encoder: ' + (e && e.message || e)); }
         });
-        var bitrate = videoBitrate(w, h, fps, options.quality);
-        session.encoder.configure({
-            codec: 'avc1.6400' + avcLevel(w, h, fps, bitrate), width: w, height: h, bitrate: bitrate, framerate: fps,
-            hardwareAcceleration: hwCache[hwKey(w, h, fps)] === true ? 'prefer-hardware' : 'no-preference',
-            bitrateMode: 'variable', latencyMode: 'quality', avc: { format: 'avc' }
-        });
+        var vcfg = encoderConfig(w, h, fps, encoderAcceleration(w, h, fps));
+        var bitrate = vcfg.bitrate;
+        session.encoder.configure(vcfg);
         var audioBitrate = aacBitrate(q.audio);
         recordBitrate = bitrate + (audioTrack || offlineSound ? audioBitrate : 0);
         session.audioBitrate = audioBitrate;
@@ -781,9 +842,9 @@ var VideoExport = (function() {
             session.tap = node;
             node.port.onmessage = function(e) {
                 try { onTapAudio(session, e.data); }
-                catch (err) { if (wc === session) failRecording('Audio capture failed: ' + err.message); }
+                catch (err) { audioProblem(session, 'Audio capture failed: ' + err.message); }
             };
-        }).catch(function(err) { if (wc === session) failRecording('Audio capture failed: ' + err.message); });
+        }).catch(function(err) { audioProblem(session, 'Audio capture failed: ' + err.message); });
         // Never hold the video back for long if the audio is slow to start.
         setTimeout(function() { session.waitingAudio = false; }, 1500);
     }
@@ -794,16 +855,23 @@ var VideoExport = (function() {
         // The newest sample was produced just now; the smallest estimate over the
         // first blocks has the least message delay in it.
         var est = performance.now() - (d.frame + n) / s.sr * 1000;
-        if (s.audioOffset === null || (s.pcmCount < 24 && est < s.audioOffset)) s.audioOffset = est;
+        if (s.audioOffset === null || (s.pcmCount < OFFSET_BLOCKS && est < s.audioOffset)) s.audioOffset = est;
         s.pcmCount++;
         s.waitingAudio = false;
         s.pcm.push(d);
         if (s.t0 !== null) flushTapAudio(s);
     }
 
-    function flushTapAudio(s) {
+    // The sound start is fixed once, so wait until the first 24 blocks have
+    // given their estimate (a busy page at REC delays the first ones). The
+    // video does not wait. At stop (final) it is fixed with what has arrived.
+    var OFFSET_BLOCKS = 24;
+    function flushTapAudio(s, final) {
         if (s.audioOffset === null) return;
-        if (s.audioStart === undefined) s.audioStart = Math.round((s.t0 - s.audioOffset) / 1000 * s.sr);
+        if (s.audioStart === undefined) {
+            if (s.pcmCount < OFFSET_BLOCKS && !final) return;
+            s.audioStart = Math.round((s.t0 - s.audioOffset) / 1000 * s.sr);
+        }
         while (s.pcm.length) {
             var d = s.pcm.shift();
             var end = d.frame + d.l.length;
@@ -813,13 +881,49 @@ var VideoExport = (function() {
         }
     }
 
+    // A sound problem in a live MP4 recording no longer costs the video: the
+    // recording carries on (and is saved) without further sound, and the user
+    // is told. Smooth MP4 sound drives the beat reactions, so it still fails.
+    function audioProblem(s, message) {
+        if (wc !== s) return;
+        if (s.offline) { failRecording(message); return; }
+        loseAudio(s, message);
+    }
+
+    // keepEncoder: still flush the sound already queued (used at stop, where
+    // only the silent tail could not be added).
+    function loseAudio(s, message, keepEncoder) {
+        if (s.audioLost) return;
+        s.audioLost = String(message || 'Sound could not be recorded.');
+        s.audioLostAt = s.nextFrame && s.sr ? s.nextFrame / s.sr : 0;
+        s.audioFailed = true;
+        s.waitingAudio = false;
+        if (s.reader) { try { s.reader.cancel().catch(function() {}); } catch (err) { /* noop */ } }
+        // Closed rather than flushed: an encoder that cannot keep up may never finish.
+        if (!keepEncoder && s.audioEncoder && s.audioEncoder.state !== 'closed') { try { s.audioEncoder.close(); } catch (err2) { /* noop */ } }
+        if (wc === s && !s.stopping && window.PsychedeliaNotify) {
+            window.PsychedeliaNotify('Sound stopped recording (' + s.audioLost + '). The video keeps recording without sound.', 'error', 8000);
+        }
+    }
+
+    function audioLostNotice(s) {
+        var reason = /[.!?]$/.test(s.audioLost) ? s.audioLost : s.audioLost + '.';
+        return (s.audioLostAt >= 1 ? 'Video saved, but its sound stops at ' + formatClock(s.audioLostAt) + '. ' : 'Video saved without sound. ') + reason;
+    }
+
+    // Silence for a gap in the sound. Long gaps (sound that stopped) use larger
+    // blocks so filling them does not overrun the encoder queue.
+    function silenceLength(gap) {
+        return Math.min(gap, gap > 64 * 4096 ? 16 * 4096 : 4096);
+    }
+
     function encodePcm(s, l, r, frameIndex) {
         if (!s.audioEncoder && !s.audioFailed) {
             var enc = new AudioEncoder({
                 output: function(chunk, meta) { s.writer.addAudio(chunk, meta); },
                 error: function(e) {
                     s.audioFailed = true;
-                    if (wc === s) failRecording('Audio encoder: ' + (e && e.message || e));
+                    audioProblem(s, 'Audio encoder: ' + (e && e.message || e));
                 }
             });
             s.audioEncoder = enc;
@@ -830,7 +934,7 @@ var VideoExport = (function() {
         // missing (sound that started late) becomes silence, overlaps are skipped.
         if (s.nextFrame === undefined) s.nextFrame = 0;
         while (frameIndex > s.nextFrame) {
-            var gap = Math.min(4096, frameIndex - s.nextFrame);
+            var gap = silenceLength(frameIndex - s.nextFrame);
             encodeBlock(s, new Float32Array(gap), new Float32Array(gap), s.nextFrame);
         }
         if (frameIndex < s.nextFrame) {
@@ -877,7 +981,7 @@ var VideoExport = (function() {
                     onTapAudio(session, { frame: Math.round(data.timestamp * session.sr / 1e6), l: l, r: r });
                 } finally { data.close(); }
                 pump();
-            }).catch(function(err) { if (!session.stopping && wc === session) failRecording('Audio reader: ' + err.message); });
+            }).catch(function(err) { if (!session.stopping) audioProblem(session, 'Audio reader: ' + err.message); });
         }
         pump();
         // Never hold the video back for long if the audio is slow to start.
@@ -890,7 +994,9 @@ var VideoExport = (function() {
         var now = performance.now();
         if (s.t0 === null) {
             s.t0 = now;
-            if (s.pcm) flushTapAudio(s);
+            if (s.pcm) {
+                try { flushTapAudio(s); } catch (err) { audioProblem(s, 'Audio capture failed: ' + err.message); }
+            }
         }
         // Bound queued pixel buffers. Smooth export waits before rendering;
         // live capture reports missed frames and keeps wall-clock audio sync.
@@ -950,15 +1056,28 @@ var VideoExport = (function() {
             if (!s.audioTrack) return null;
             return new Promise(function(r) { setTimeout(r, 150); }).then(function() {
                 s.audioClosed = true;
-                if (!s.audioEncoder || s.audioEncoder.state !== 'configured' || s.nextFrame === undefined) throw new Error('No audio was captured.');
+                if (s.audioLost) return;   // saved without (further) sound
+                // Blocks still held back for the timing estimate (short recordings).
+                if (s.pcm && s.pcm.length && s.t0 !== null) {
+                    try { flushTapAudio(s, true); } catch (errTap) { loseAudio(s, 'Audio capture failed: ' + (errTap && errTap.message || errTap), true); return; }
+                }
+                if (!s.audioEncoder || s.audioEncoder.state !== 'configured' || s.nextFrame === undefined) { loseAudio(s, 'No audio was captured.'); return; }
                 var endFrame = Math.round(s.endSlot / s.fps * s.sr);
-                while (s.nextFrame < endFrame) {
-                    var gap = Math.min(4096, endFrame - s.nextFrame);
-                    encodePcm(s, new Float32Array(gap), new Float32Array(gap), s.nextFrame);
+                try {
+                    while (s.nextFrame < endFrame) {
+                        var gap = silenceLength(endFrame - s.nextFrame);
+                        encodePcm(s, new Float32Array(gap), new Float32Array(gap), s.nextFrame);
+                    }
+                } catch (errFill) {
+                    // The sound track ends at s.nextFrame, before the video: say so. Smooth MP4 never gets here.
+                    if (s.offline) throw errFill;
+                    loseAudio(s, 'Sound could not be finished: ' + (errFill && errFill.message || errFill), true);
                 }
             });
         }).then(function() {
-            return s.audioEncoder && s.audioEncoder.state === 'configured' ? s.audioEncoder.flush() : null;
+            if (!s.audioEncoder || s.audioEncoder.state !== 'configured') return null;
+            var flushAudio = s.audioEncoder.flush();
+            return s.offline ? flushAudio : flushAudio.catch(function(errAudio) { loseAudio(s, 'Audio encoder: ' + (errAudio && errAudio.message || errAudio)); });
         }).then(function() {
             if (s.failed || wc !== s) return;
             if (s.offline && s.writer.getFrameCount() !== s.frames) throw new Error('The encoder did not return every requested frame.');
@@ -968,16 +1087,26 @@ var VideoExport = (function() {
             wc = null;
             stopCompositeStream();
             finishSaving();
-            if (blob && blob.size > 0 && callback) callback(blob);
+            try {
+                if (blob && blob.size > 0 && callback) callback(blob);
+            } catch (errSave) {
+                // The session is already torn down, so report it here rather than through failRecording.
+                setLastError('Saving the video failed: ' + (errSave && errSave.message || errSave));
+                try { window.dispatchEvent(new CustomEvent('psychedelia:recording-error', { detail: { message: lastError } })); } catch (errEv2) { /* noop */ }
+                return;
+            }
             if (blob) {
                 // Tell the app how it went (it shows a note when frames were dropped).
                 var seconds = s.endSlot / s.fps;
                 try {
                     window.dispatchEvent(new CustomEvent('psychedelia:recording-saved', { detail: {
                         seconds: seconds, frames: s.writer.getFrameCount(), fps: s.fps, avgFps: s.writer.getFrameCount() / Math.max(seconds, 0.001),
-                        megabytes: blob.size / 1048576, audio: !!s.audioEncoder, mode: s.offline ? 'smooth' : 'live', drops: s.drops
+                        megabytes: blob.size / 1048576, audio: !!s.audioEncoder && !s.audioLost, mode: s.offline ? 'smooth' : 'live', drops: s.drops,
+                        audioLost: s.audioLost || ''
                     } }));
                 } catch (errEv) { /* noop */ }
+                // The app's "Saved" note does not know about lost sound; this replaces it.
+                if (s.audioLost && window.PsychedeliaNotify) window.PsychedeliaNotify(audioLostNotice(s), 'info', 12000);
             }
         }).catch(function(err) {
             if (wc === s) failRecording('Saving the video failed: ' + (err && err.message || err));
@@ -1013,6 +1142,7 @@ var VideoExport = (function() {
 
         if (useWebCodecs()) {
             try {
+                if (encoderRefuses(canvas.width, canvas.height, fps)) throw new Error('The H.264 encoder does not support ' + canvas.width + 'x' + canvas.height + ' at ' + fps + ' fps.');
                 if (startWebCodecs(canvas, fps, durationSec)) {
                     recording = true;
                     recordStart = performance.now();
@@ -1322,6 +1452,7 @@ var VideoExport = (function() {
         getStatus: getStatus,
         getOfflineAnalysis: getOfflineAnalysis,
         getOfflineMusic: getOfflineMusic,
+        buildRecordMix: buildRecordMix,
         captureFrame: captureFrame,
         isFrameExport: isFrameExport,
         canCaptureFrame: canCaptureFrame,

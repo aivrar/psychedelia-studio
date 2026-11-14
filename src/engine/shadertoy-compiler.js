@@ -23,10 +23,30 @@ var ShadertoyCompiler = (function() {
         return src ? src.split('\n').length : 0;
     }
 
+    function newlineCount(src) {
+        return src ? src.split('\n').length - 1 : 0;
+    }
+
+    // Rewrites "ERROR: 0:N:" / "WARNING: 0:N:" so N refers to the user's own
+    // pass source (or "Common 0:N" / "host 0:N" for other sections).
+    function remapLog(log, commonStart, passStart, passLines) {
+        if (!log) return log;
+        return String(log).replace(/\b(ERROR|WARNING):\s*(\d+):(\d+)(?=:)/g, function(match, kind, file, lineText) {
+            var line = Number(lineText);
+            if (line >= passStart && line < passStart + passLines) {
+                return kind + ': ' + file + ':' + (line - passStart + 1);
+            }
+            if (line >= commonStart && line < passStart) {
+                return kind + ': Common ' + file + ':' + (line - commonStart + 1);
+            }
+            return kind + ': host ' + file + ':' + line;
+        });
+    }
+
     function stripVersionDirectives(src, label, warnings) {
         var versions = [];
         var stripped = String(src || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-        stripped = stripped.replace(/^\s*#version[^\n]*(?:\n|$)/gm, function(match) {
+        stripped = stripped.replace(/^[ \t]*#version[^\n]*(?:\n|$)/gm, function(match) {
             versions.push(match.trim());
             return '\n';
         });
@@ -146,8 +166,11 @@ var ShadertoyCompiler = (function() {
         }
 
         var prefix = buildUniformBlock(isWebGL2, options.webgl1Extensions);
-        var commonStart = lineCount(prefix) + 1;
-        var passStart = commonStart + lineCount(common.source) + 1;
+        // prefix ends with '\n', so Common begins on the line after its last
+        // newline; the pass begins after Common's own lines plus the '\n'
+        // joiner (an empty Common still occupies one blank line).
+        var commonStart = newlineCount(prefix) + 1;
+        var passStart = commonStart + newlineCount(common.source) + 1;
         var fragCoordExpr = (options.passId || 'image') === 'image' ? 'psyViewFragCoord(gl_FragCoord.xy)' : 'gl_FragCoord.xy';
         var suffix = isWebGL2
             ? '\nvoid main() {\n    vec4 color = vec4(0.0);\n    mainImage(color, ' + fragCoordExpr + ');\n    fragColor = color;\n}\n'
@@ -245,7 +268,8 @@ var ShadertoyCompiler = (function() {
 
         var fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragment.source);
         if (!fragmentShader.shader) {
-            result.shaderLog = fragmentShader.log;
+            result.rawShaderLog = fragmentShader.log;
+            result.shaderLog = remapLog(fragmentShader.log, result.lineOffset.commonStart, result.lineOffset.passStart, Math.max(1, fragment.sections[2].lineCount));
             gl.deleteShader(vertex.shader);
             return result;
         }

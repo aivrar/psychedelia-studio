@@ -82,7 +82,7 @@ var ShadertoyHost = (function() {
                 '    vec2 m = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;',
                 '    if (iMouse.z == 0.0 && iMouse.w == 0.0) m = 0.35 * vec2(cos(iTime), sin(iTime));',
                 '    float d = length(uv - m);',
-                '    float ring = smoothstep(0.09, 0.085, abs(d - 0.22));',
+                '    float ring = 1.0 - smoothstep(0.085, 0.09, abs(d - 0.22));',
                 '    float glow = 0.012 / max(d, 0.012);',
                 '    vec3 color = vec3(glow * 0.35) + ring * vec3(0.2, 0.9, 1.0);',
                 '    fragColor = vec4(color, 1.0);',
@@ -146,7 +146,7 @@ var ShadertoyHost = (function() {
                     '    vec2 uv = fragCoord / iResolution.xy;',
                     '    vec4 prev = texture(iChannel0, uv) * 0.965;',
                     '    vec2 p = 0.5 + 0.32 * vec2(cos(iTime * 1.4), sin(iTime * 1.7));',
-                    '    float dotGlow = smoothstep(0.04, 0.0, length(uv - p));',
+                    '    float dotGlow = 1.0 - smoothstep(0.0, 0.04, length(uv - p));',
                     '    fragColor = max(prev, vec4(dotGlow, dotGlow * 0.25, 0.9 * dotGlow, 1.0));',
                     '}'
                 ]);
@@ -593,6 +593,10 @@ var ShadertoyHost = (function() {
             ShadertoyChannels.setPaused(true, ShadertoyUniforms.getState(Renderer.getCanvas()));
             ShadertoyChannels.releaseUserMedia();
         }
+        // Free the buffer render targets while another effect runs; the
+        // graph's resize() recreates them on the next render/reset. Programs
+        // and the project are kept.
+        if (graph && graph.destroyTargets) graph.destroyTargets();
         if (typeof ShadertoyEditor !== 'undefined') ShadertoyEditor.hide();
     }
 
@@ -604,6 +608,9 @@ var ShadertoyHost = (function() {
         graph = null;
         compileResult = null;
         pausedUniformState = null;
+        // Channel textures (images, keyboard, audio, media) belong to the lost
+        // context too; drop them so they are recreated lazily.
+        if (typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.reset) ShadertoyChannels.reset(glRef);
     }
 
     function clearTarget(gl) {
@@ -806,10 +813,13 @@ var ShadertoyHost = (function() {
 
     function bufferIdFromInput(input) {
         var text = String((input && (input.src || input.id || input.source || input.name || input.channel)) || '').toLowerCase();
-        if (/buffer\s*a|buffera|buffer0|buffer00/.test(text)) return 'bufferA';
-        if (/buffer\s*b|bufferb|buffer1|buffer01/.test(text)) return 'bufferB';
-        if (/buffer\s*c|bufferc|buffer2|buffer02/.test(text)) return 'bufferC';
-        if (/buffer\s*d|bufferd|buffer3|buffer03/.test(text)) return 'bufferD';
+        if (/buffer\s*a|buffera/.test(text)) return 'bufferA';
+        if (/buffer\s*b|bufferb/.test(text)) return 'bufferB';
+        if (/buffer\s*c|bufferc/.test(text)) return 'bufferC';
+        if (/buffer\s*d|bufferd/.test(text)) return 'bufferD';
+        // Shadertoy media names: buffer00..buffer03 (or buffer0..buffer3).
+        var digit = /buffer\s*0?([0-3])(?![0-9])/.exec(text);
+        if (digit) return ['bufferA', 'bufferB', 'bufferC', 'bufferD'][Number(digit[1])];
         return null;
     }
 
@@ -831,10 +841,21 @@ var ShadertoyHost = (function() {
 
     function setProject(project) {
         var gl = glRef || Renderer.getGL();
+        // A replaced project (import, API, library, example) did not get its
+        // camera/mic channels from a click in this session: stop any live
+        // stream and require Enable again.
+        if (typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.revokeMedia) ShadertoyChannels.revokeMedia();
         if (!graph && gl) graph = ShadertoyPassGraph.create(gl, project);
         else if (graph) graph.setProject(project);
         compileResult = null;
         save();
+    }
+
+    // Stops webcam/microphone streams that no enabled pass references now.
+    function releaseUnusedMedia() {
+        if (graph && graph.project && typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.releaseUnusedMedia) {
+            ShadertoyChannels.releaseUnusedMedia(graph.project);
+        }
     }
 
     function setMetadata(metadata) {
@@ -891,6 +912,7 @@ var ShadertoyHost = (function() {
         ensureGraph();
         if (!graph) return;
         graph.setPassEnabled(id, enabled);
+        releaseUnusedMedia();
         save();
     }
 
@@ -905,6 +927,7 @@ var ShadertoyHost = (function() {
         ensureGraph();
         if (!graph) return;
         graph.setChannel(passId, slot, channel);
+        releaseUnusedMedia();
         save();
     }
 
@@ -913,6 +936,7 @@ var ShadertoyHost = (function() {
         if (!graph) return false;
         var ok = graph.copyBufferPass(fromId, toId);
         if (ok) {
+            releaseUnusedMedia();
             compileResult = graph.getStatus();
             save();
             notifyStatus();
@@ -925,6 +949,7 @@ var ShadertoyHost = (function() {
         if (!graph) return false;
         var ok = graph.clearBufferPass(id);
         if (ok) {
+            releaseUnusedMedia();
             compileResult = graph.getStatus();
             save();
             notifyStatus();

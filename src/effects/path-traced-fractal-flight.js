@@ -326,7 +326,7 @@ void main() {
         vec3 lightDir = normalize(vec3(-0.45, 0.68, 0.52));
         float diff = max(dot(n, lightDir), 0.0);
         float sh = softShadow(p + n * 0.018, lightDir, 0.035, 2.6);
-        float fres = pow(1.0 - max(dot(n, -rd), 0.0), 4.0);
+        float fres = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0);
         vec3 refl = reflect(rd, n);
         vec3 refr = refract(rd, n, 1.0 / max(u_ior, 1.05));
         if (length(refr) < 0.001) refr = refl;

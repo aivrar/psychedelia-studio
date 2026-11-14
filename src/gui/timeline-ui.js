@@ -131,9 +131,11 @@ var TimelineUI = (function() {
         document.getElementById('tlPlay').addEventListener('click', function() {
             Renderer.play();
             Timeline.play();
+            if (window.PsychedeliaSyncPlayState) window.PsychedeliaSyncPlayState();
         });
         document.getElementById('tlPause').addEventListener('click', function() {
             Timeline.pause();
+            if (window.PsychedeliaSyncPlayState) window.PsychedeliaSyncPlayState();
         });
         document.getElementById('tlStop').addEventListener('click', function() {
             Timeline.stop();

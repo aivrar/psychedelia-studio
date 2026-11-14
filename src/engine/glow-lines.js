@@ -58,6 +58,13 @@ var GlowLines = (function() {
         return p;
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Program, Buffer, ...
+    function drop(gl, kind, obj) {
+        if (obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function create() {
         var st = { gl: null, line: null, comp: null, vbo: null, quad: null, fbo: null, tex: null, w: 0, h: 0, verts: null, lineLoc: null, compLoc: null, segments: 0 };
 
@@ -130,6 +137,10 @@ var GlowLines = (function() {
             ].join('\n'));
             st.vbo = gl.createBuffer();
             st.quad = gl.createBuffer();
+            // isBuffer() is false until a buffer is first bound; bind vbo once
+            // so cleanup() can tell it from a lost context's buffer even if
+            // nothing was drawn yet.
+            gl.bindBuffer(gl.ARRAY_BUFFER, st.vbo);
             gl.bindBuffer(gl.ARRAY_BUFFER, st.quad);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
             st.lineLoc = null;
@@ -139,12 +150,12 @@ var GlowLines = (function() {
         function cleanup(gl) {
             gl = gl || st.gl;
             if (gl) {
-                if (st.line) gl.deleteProgram(st.line);
-                if (st.comp) gl.deleteProgram(st.comp);
-                if (st.vbo) gl.deleteBuffer(st.vbo);
-                if (st.quad) gl.deleteBuffer(st.quad);
-                if (st.fbo) gl.deleteFramebuffer(st.fbo);
-                if (st.tex) gl.deleteTexture(st.tex);
+                drop(gl, 'Program', st.line);
+                drop(gl, 'Program', st.comp);
+                drop(gl, 'Buffer', st.vbo);
+                drop(gl, 'Buffer', st.quad);
+                drop(gl, 'Framebuffer', st.fbo);
+                drop(gl, 'Texture', st.tex);
             }
             st.gl = st.line = st.comp = st.vbo = st.quad = st.fbo = st.tex = null;
             st.w = st.h = 0;
@@ -154,8 +165,8 @@ var GlowLines = (function() {
 
         function ensureFbo(gl, w, h) {
             if (st.fbo && st.w === w && st.h === h) return;
-            if (st.fbo) gl.deleteFramebuffer(st.fbo);
-            if (st.tex) gl.deleteTexture(st.tex);
+            drop(gl, 'Framebuffer', st.fbo);
+            drop(gl, 'Texture', st.tex);
             st.tex = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, st.tex);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);

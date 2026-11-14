@@ -195,10 +195,47 @@ var Timeline = (function() {
             }
         }
 
-        applyClipAtPlayhead();
-        if (onUpdate) onUpdate('playhead');
+        // A clip that fails to apply must not end playback silently.
+        try {
+            applyClipAtPlayhead();
+        } catch (err) {
+            console.error('Timeline clip could not be applied:', err);
+            var failedClip = getClipAt(playhead);
+            if (failedClip) activeClipId = failedClip.id; // do not retry it every frame
+        }
+        try { if (onUpdate) onUpdate('playhead'); } catch (err2) { console.error(err2); }
 
         if (playing) tickId = requestAnimationFrame(tick);
+    }
+
+    // Clip params can come from an imported file: keep only values that are
+    // valid for the effect's params, coerced and clamped like saved setups.
+    function cleanParams(effectName, params) {
+        if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+        if (typeof EffectRegistry === 'undefined' || !EffectRegistry.getDefinition) return params;
+        var def = EffectRegistry.getDefinition(effectName);
+        var out = {};
+        ((def && def.params) || []).forEach(function(p) {
+            if (!p || !Object.prototype.hasOwnProperty.call(params, p.name)) return;
+            var v = params[p.name];
+            if (p.type === 'color') {
+                if (Array.isArray(v) && v.length === 3 && v.every(function(n) { return typeof n === 'number' && isFinite(n); })) {
+                    out[p.name] = v.map(function(n) { return Math.max(0, Math.min(1, n)); });
+                }
+            } else if (p.type === 'text' || p.type === 'textarea') {
+                if (typeof v === 'string' && v.length <= 20000) out[p.name] = v;
+            } else if (p.type !== 'image') {
+                var n = typeof v === 'number' ? v : typeof v === 'boolean' ? (v ? 1 : 0) :
+                    (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+                if (!isFinite(n)) return;
+                var min = p.type === 'select' || p.type === 'bool' ? 0 : p.min;
+                var max = p.type === 'select' ? (p.options || []).length - 1 : p.type === 'bool' ? 1 : p.max;
+                n = Math.max(min === undefined ? n : min, Math.min(max === undefined ? n : max, n));
+                if (p.type === 'select' || p.type === 'int' || p.type === 'bool') n = Math.round(n);
+                out[p.name] = n;
+            }
+        });
+        return out;
     }
 
     function applyClipAtPlayhead() {
@@ -208,24 +245,27 @@ var Timeline = (function() {
         if (activeClipId !== clip.id) {
             var previousClipId = activeClipId;
 
-            // Switch effect
-            if (!EffectRegistry.switchTo(clip.effectName)) return;
+            // Switch effect, with the clip's values so the right shader
+            // variant (mode) is compiled straight away.
+            var params = cleanParams(clip.effectName, clip.params);
+            // _system: a clip change is playback, not a user's effect pick.
+            if (!EffectRegistry.switchTo(clip.effectName, params ? { values: params, _system: true } : { _system: true })) return;
             activeClipId = clip.id;
             if (clip.seed !== undefined && typeof Renderer !== 'undefined' && Renderer.setSeed) {
                 Renderer.setSeed(clip.seed, clip.seedVec);
             }
 
             // Apply clip params
-            if (clip.params) {
-                Controls.setValues(clip.params);
+            if (params) {
+                Controls.setValues(params);
                 // Rebuild sliders with stored values
                 var effect = EffectRegistry.getCurrent();
                 if (effect && effect.params) {
                     var paramDefs = effect.params.map(function(p) {
                         var newP = {};
                         for (var k in p) newP[k] = p[k];
-                        if (clip.params[p.name] !== undefined) {
-                            newP.default = clip.params[p.name];
+                        if (params[p.name] !== undefined) {
+                            newP.default = params[p.name];
                         }
                         return newP;
                     });

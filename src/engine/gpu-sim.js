@@ -115,7 +115,13 @@ var GpuSim = (function() {
     }
 
     function quadBuffer(gl) {
-        for (var i = 0; i < quads.length; i++) if (quads[i].gl === gl) return quads[i].buf;
+        for (var i = 0; i < quads.length; i++) {
+            if (quads[i].gl !== gl) continue;
+            // A restored context keeps the gl object but its buffers are dead.
+            if (gl.isBuffer(quads[i].buf)) return quads[i].buf;
+            quads.splice(i, 1);
+            break;
+        }
         var buf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, buf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
@@ -172,9 +178,11 @@ var GpuSim = (function() {
         (list || []).forEach(function(x) {
             if (!x) return;
             if (x.read && x.write) { release(gl, [x.read, x.write]); return; }
-            if (x.fb) gl.deleteFramebuffer(x.fb);
-            if (x.tex) gl.deleteTexture(x.tex);
-            if (x.p) gl.deleteProgram(x.p);
+            // Objects of a lost context (is* false) are only dropped: deleting
+            // them would leave INVALID_OPERATION in the error queue.
+            if (x.fb && gl.isFramebuffer(x.fb)) gl.deleteFramebuffer(x.fb);
+            if (x.tex && gl.isTexture(x.tex)) gl.deleteTexture(x.tex);
+            if (x.p && gl.isProgram(x.p)) gl.deleteProgram(x.p);
         });
     }
 

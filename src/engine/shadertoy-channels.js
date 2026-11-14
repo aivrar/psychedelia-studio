@@ -21,6 +21,17 @@ var ShadertoyChannels = (function() {
     var mediaPaused = false;
     var pausedTime = null;
 
+    // Session-only user approvals. Projects arrive from untrusted routes
+    // (pasted/imported JSON, the Shadertoy API, the library, the project
+    // restored from localStorage), so a camera/microphone channel or a
+    // local-network URL inside one must not start on its own. These flags are
+    // set only by explicit clicks in the channel UI and are never serialised.
+    var mediaArmed = { webcam: false, microphone: false };
+    var approvedUrls = {};
+    var sessionBlobUrls = {};
+    var classifyCache = {};
+    var classifyCacheSize = 0;
+
     function init(gl) {
         glRef = gl || glRef;
         initKeyboard();
@@ -88,12 +99,235 @@ var ShadertoyChannels = (function() {
         ].join(':');
     }
 
+    // ---- URL hygiene -------------------------------------------------------
+
+    var MEDIA_DATA_URL = /^data:(image|video|audio)\/[a-z0-9][a-z0-9.+-]*(;[^,]*)?,/i;
+
+    function pageInfo(page) {
+        if (page) return page;
+        var loc = typeof location !== 'undefined' && location ? location : {};
+        return { href: loc.href || '', protocol: loc.protocol || '', origin: loc.origin || '' };
+    }
+
+    function ipv4Private(a, b) {
+        return a === 0 || a === 10 || a === 127 ||
+            (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && b === 168) ||
+            (a === 100 && b >= 64 && b <= 127) ||
+            a >= 224;
+    }
+
+    // True for loopback, private, link-local and local-only names. Public DNS
+    // names that resolve to private addresses cannot be detected here.
+    function isPrivateHost(hostname) {
+        var h = String(hostname || '').toLowerCase().replace(/\.$/, '');
+        if (!h) return true;
+        if (h.charAt(0) === '[' && h.charAt(h.length - 1) === ']') h = h.slice(1, -1);
+        if (h.indexOf(':') >= 0) {
+            if (h === '::' || h === '::1') return true;
+            var mapped = /^::ffff:(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+            if (mapped) return ipv4Private(Number(mapped[1]), Number(mapped[2]));
+            var mappedHex = /^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/.exec(h);
+            if (mappedHex) {
+                var hi = parseInt(mappedHex[1], 16);
+                return ipv4Private(hi >> 8, hi & 255);
+            }
+            var first = h.indexOf('::') === 0 ? 0 : parseInt(h.split(':')[0], 16);
+            if (!isFinite(first)) return true;
+            return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xffc0) === 0xfec0 || first === 0;
+        }
+        var v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+        if (v4) return ipv4Private(Number(v4[1]), Number(v4[2]));
+        if (h === 'localhost' || /\.localhost$/.test(h) || /\.local$/.test(h) || /\.internal$/.test(h)) return true;
+        // Single-label names (http://router/) only resolve on the local network.
+        return h.indexOf('.') < 0;
+    }
+
+    // Classifies a channel source string. verdict: 'allow' (load now),
+    // 'confirm' (local-network host: load only after a user click), 'reject'
+    // (never load) or 'empty'. `field` is 'url' or 'dataUrl'.
+    function classifyUrl(raw, field, page) {
+        page = pageInfo(page);
+        var src = String(raw == null ? '' : raw).trim();
+        if (!src) return { verdict: 'empty', href: '', host: '', reason: '' };
+        if (/^data:/i.test(src)) {
+            return MEDIA_DATA_URL.test(src)
+                ? { verdict: 'allow', href: src, host: '', reason: '' }
+                : { verdict: 'reject', href: '', host: '', reason: 'Embedded data was ignored: only image, video or audio data is accepted.' };
+        }
+        if (/^blob:/i.test(src)) {
+            // A matching origin does not prove this page made the blob (another
+            // same-origin tab may have), so only blob: URLs registered by this
+            // session's own code are accepted. Channel file picks currently
+            // become data: URLs, so in practice project blob: URLs are rejected.
+            return sessionBlobUrls[src]
+                ? { verdict: 'allow', href: src, host: '', reason: '' }
+                : { verdict: 'reject', href: '', host: '', reason: 'This blob: URL was not created in this session and was ignored.' };
+        }
+        if (field === 'dataUrl') {
+            return { verdict: 'reject', href: '', host: '', reason: 'Embedded data was ignored: only image, video or audio data is accepted.' };
+        }
+        var parsed = null;
+        try { parsed = page.href ? new URL(src, page.href) : new URL(src); } catch (err) { parsed = null; }
+        if (!parsed) return { verdict: 'reject', href: '', host: '', reason: 'Not a valid URL.' };
+        var protocol = parsed.protocol;
+        if (protocol === 'http:' && page.protocol === 'https:') {
+            return { verdict: 'reject', href: '', host: parsed.host, reason: 'http:// URLs cannot load on an https page; use an https:// URL.' };
+        }
+        if (protocol !== 'https:' && protocol !== 'http:') {
+            return { verdict: 'reject', href: '', host: '', reason: 'Only https:// URLs (or image/video files) are supported.' };
+        }
+        // Same origin skips the private-host check: it is the server the app is already loaded from (e.g. localhost dev), so no new exposure.
+        if (page.origin && page.origin !== 'null' && parsed.origin === page.origin) {
+            return { verdict: 'allow', href: parsed.href, host: parsed.host, reason: '' };
+        }
+        if (isPrivateHost(parsed.hostname)) {
+            return { verdict: 'confirm', href: parsed.href, host: parsed.host, reason: 'Local network address.' };
+        }
+        return { verdict: 'allow', href: parsed.href, host: parsed.host, reason: '' };
+    }
+
+    function classifyCached(raw, field) {
+        var key = field + '|' + raw;
+        if (classifyCache[key]) return classifyCache[key];
+        if (classifyCacheSize > 256) {
+            classifyCache = {};
+            classifyCacheSize = 0;
+        }
+        classifyCacheSize++;
+        return (classifyCache[key] = classifyUrl(raw, field));
+    }
+
+    // Decides what an image/video channel may load right now. Returns
+    // { verdict, src, field, status } where src is what to fetch when the
+    // verdict is 'allow'. An invalid dataUrl is ignored (falls back to url).
+    function checkSource(channel) {
+        channel = channel || {};
+        var dataCheck = channel.dataUrl ? classifyCached(String(channel.dataUrl), 'dataUrl') : null;
+        if (dataCheck && dataCheck.verdict === 'allow') return { verdict: 'allow', src: dataCheck.href, field: 'dataUrl', status: null };
+        var urlCheck = channel.url ? classifyCached(String(channel.url), 'url') : null;
+        var kind = channel.kind === 'video' ? 'video' : 'image';
+        if (!urlCheck) {
+            if (!dataCheck) return { verdict: 'empty', src: '', field: '', status: null };
+            return { verdict: 'reject', src: '', field: 'dataUrl', status: sourceStatus(kind, 'error', dataCheck.reason) };
+        }
+        if (urlCheck.verdict === 'allow' || (urlCheck.verdict === 'confirm' && approvedUrls[urlCheck.href])) {
+            return { verdict: 'allow', src: urlCheck.href, field: 'url', status: null };
+        }
+        if (urlCheck.verdict === 'confirm') {
+            var status = sourceStatus(kind, 'blocked', urlCheck.host + ' is a local network address. Click to load ' + urlCheck.host + '.');
+            status.action = { type: 'url', url: urlCheck.href, label: 'Load ' + urlCheck.host };
+            return { verdict: 'confirm', src: '', field: 'url', status: status };
+        }
+        return { verdict: urlCheck.verdict, src: '', field: 'url', status: sourceStatus(kind, 'error', urlCheck.reason) };
+    }
+
+    function sourceStatus(kind, state, message) {
+        return { state: state, message: message, kind: kind, width: 1, height: 1 };
+    }
+
+    // Called when the user types/confirms a URL or clicks "Load <host>".
+    function allowUrl(raw) {
+        var check = classifyUrl(raw, 'url');
+        if (check.verdict !== 'allow' && check.verdict !== 'confirm') return false;
+        if (!approvedUrls[check.href]) {
+            approvedUrls[check.href] = true;
+            notify();
+        }
+        return true;
+    }
+
+    // Session-only registry of blob: URLs this page created for a channel
+    // (e.g. a future file picker using URL.createObjectURL). Never serialised.
+    function registerBlobUrl(url) {
+        url = String(url || '');
+        if (!/^blob:/i.test(url)) return false;
+        sessionBlobUrls[url] = true;
+        classifyCache = {};
+        classifyCacheSize = 0;
+        return true;
+    }
+
+    function revokeBlobUrl(url) {
+        url = String(url || '');
+        if (!sessionBlobUrls[url]) return false;
+        delete sessionBlobUrls[url];
+        classifyCache = {};
+        classifyCacheSize = 0;
+        try { if (typeof URL !== 'undefined' && URL.revokeObjectURL) URL.revokeObjectURL(url); } catch (err) { /* noop */ }
+        notify();
+        return true;
+    }
+
+    // ---- Camera / microphone gating ---------------------------------------
+
+    function mediaGateStatus(kind) {
+        var label = kind === 'webcam' ? 'Camera' : 'Microphone';
+        return {
+            state: 'permission',
+            gated: true,
+            message: label + ' is off — click Enable ' + label.toLowerCase() + ' to use it.',
+            kind: kind,
+            width: kind === 'webcam' ? 1 : 512,
+            height: kind === 'webcam' ? 1 : 2,
+            action: { type: 'media', kind: kind, label: 'Enable ' + label.toLowerCase() }
+        };
+    }
+
+    // Arms webcam/microphone for this page session after a user action in the
+    // channel UI (choosing the input or clicking Enable).
+    function allowMedia(kind) {
+        if (kind !== 'webcam' && kind !== 'microphone') return false;
+        if (!mediaArmed[kind]) {
+            mediaArmed[kind] = true;
+            if (statuses[kind] && statuses[kind].gated) delete statuses[kind];
+            notify();
+        }
+        return true;
+    }
+
+    function isMediaAllowed(kind) {
+        return !!mediaArmed[kind];
+    }
+
+    // Used when a whole new project is loaded: its camera/mic channels did not
+    // come from a click in this session, so they must be enabled again.
+    function revokeMedia() {
+        mediaArmed.webcam = false;
+        mediaArmed.microphone = false;
+        releaseUserMedia();
+    }
+
+    // Stops the webcam/microphone stream when no enabled pass of `project`
+    // references it any more (channel changed, pass cleared/disabled, project
+    // replaced).
+    function releaseUnusedMedia(project) {
+        var uses = { webcam: false, microphone: false };
+        ((project && project.passes) || []).forEach(function(pass) {
+            if (!pass || (pass.id !== 'image' && !pass.enabled)) return;
+            (pass.channels || []).forEach(function(channel) {
+                if (channel && (channel.kind === 'webcam' || channel.kind === 'microphone')) uses[channel.kind] = true;
+            });
+        });
+        var changed = false;
+        if (!uses.webcam && webcamEntry) changed = releaseWebcam() || changed;
+        if (!uses.microphone && microphoneEntry) changed = releaseMicrophone() || changed;
+        if (changed) notify();
+        return uses;
+    }
+
+    function channelSourceKey(channel) {
+        var check = checkSource(channel);
+        return check.verdict === 'allow' ? check.src : (channel.dataUrl || channel.url || '');
+    }
+
     function channelKey(channel) {
         channel = channel || {};
         if (channel.kind === 'procedural') return 'procedural:' + (channel.sourceId || 'checker') + ':' + samplerKey(channel.sampler);
-        if (channel.kind === 'image') return 'image:' + hashString(channel.dataUrl || channel.url || '') + ':' + samplerKey(channel.sampler);
+        if (channel.kind === 'image') return 'image:' + hashString(channelSourceKey(channel)) + ':' + samplerKey(channel.sampler);
         if (channel.kind === 'video' && channel.sourceId === 'demo') return 'video:demo:' + samplerKey(channel.sampler);
-        if (channel.kind === 'video') return 'video:' + hashString(channel.dataUrl || channel.url || '') + ':' + samplerKey(channel.sampler);
+        if (channel.kind === 'video') return 'video:' + hashString(channelSourceKey(channel)) + ':' + samplerKey(channel.sampler);
         if (channel.kind === 'webcam') return 'webcam:' + samplerKey(channel.sampler);
         if (channel.kind === 'microphone') return 'microphone';
         if (channel.kind === 'audio') return 'audio';
@@ -198,11 +432,14 @@ var ShadertoyChannels = (function() {
     }
 
     function resolveImage(gl, channel, fallback) {
-        var src = channel.dataUrl || channel.url || '';
-        var key = channelKey(channel);
-        if (!src) {
+        var check = checkSource(channel);
+        if (check.verdict === 'empty') {
             return fallbackResult(fallback, { state: 'empty', message: 'No image selected.' });
         }
+        if (check.verdict !== 'allow') return fallbackResult(fallback, check.status);
+        var src = check.src;
+        var fromUrl = check.field === 'url';
+        var key = channelKey(channel);
         if (cache[key] && statuses[key] && statuses[key].state === 'ready') {
             return {
                 texture: cache[key].texture,
@@ -214,23 +451,33 @@ var ShadertoyChannels = (function() {
         if (!statuses[key]) {
             statuses[key] = { state: 'loading', message: 'Loading image...', kind: 'image', width: 1, height: 1 };
             var img = new Image();
-            if (channel.url && !channel.dataUrl && !/^(data:|blob:)/.test(channel.url)) img.crossOrigin = 'anonymous';
+            if (fromUrl && !/^(data:|blob:)/i.test(src)) img.crossOrigin = 'anonymous';
             img.onload = function() {
                 var status = { state: 'ready', message: '', kind: 'image', width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
-                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, channel.sampler && channel.sampler.vflip ? 1 : 0);
-                var texture = gl.createTexture();
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-                applySampler(gl, texture, status.width, status.height, channel.sampler, status);
-                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
-                cache[key] = { texture: texture, width: status.width, height: status.height, time: 0 };
+                var texture = null;
+                try {
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, channel.sampler && channel.sampler.vflip ? 1 : 0);
+                    texture = gl.createTexture();
+                    gl.bindTexture(gl.TEXTURE_2D, texture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                    applySampler(gl, texture, status.width, status.height, channel.sampler, status);
+                } catch (err) {
+                    // Tainted (cross-origin) or otherwise unusable image.
+                    if (texture) {
+                        try { gl.deleteTexture(texture); } catch (err2) { /* noop */ }
+                    }
+                    texture = null;
+                    status = { state: 'error', message: 'Image loaded but could not be used as a texture (blocked by cross-origin rules).', kind: 'image', width: 1, height: 1 };
+                }
+                try { gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0); } catch (err3) { /* noop */ }
+                if (texture) cache[key] = { texture: texture, width: status.width, height: status.height, time: 0 };
                 statuses[key] = status;
                 notify();
             };
             img.onerror = function() {
                 statuses[key] = {
                     state: 'error',
-                    message: channel.url ? 'Image URL failed to load or was blocked by CORS.' : 'Image file failed to load.',
+                    message: fromUrl ? 'Image URL failed to load or was blocked by CORS.' : 'Image file failed to load.',
                     kind: 'image',
                     width: 1,
                     height: 1
@@ -344,16 +591,25 @@ var ShadertoyChannels = (function() {
 
     function resolveVideo(gl, channel, fallback, options) {
         if (channel.sourceId === 'demo') return resolveDemoVideo(gl, channel, fallback, options);
-        var src = channel.dataUrl || channel.url || '';
+        var check = checkSource(channel);
+        if (check.verdict === 'empty') return fallbackResult(fallback, { state: 'empty', message: 'No video selected.' });
+        if (check.verdict !== 'allow') return fallbackResult(fallback, check.status);
+        var src = check.src;
         var key = channelKey(channel);
-        if (!src) return fallbackResult(fallback, { state: 'empty', message: 'No video selected.' });
         var entry = cache[key];
         if (!entry) {
-            entry = cache[key] = makeVideoEntry(gl, channel, src, key);
+            entry = cache[key] = makeVideoEntry(gl, channel, src, key, check.field === 'url');
         }
+        if (entry.failed) return fallbackResult(fallback, statuses[key]);
         updateVideoPlayback(entry.video);
         if (entry.ready && entry.video.readyState >= 2) {
-            uploadVideoFrame(gl, entry, channel);
+            if (!uploadVideoFrame(gl, entry, channel)) {
+                entry.failed = true;
+                try { entry.video.pause(); } catch (err) { /* noop */ }
+                statuses[key] = { state: 'error', message: 'Video loaded but could not be used as a texture (blocked by cross-origin rules).', kind: 'video', width: 1, height: 1 };
+                notify();
+                return fallbackResult(fallback, statuses[key]);
+            }
             return {
                 texture: entry.texture,
                 resolution: [entry.width || 1, entry.height || 1, 1],
@@ -395,13 +651,13 @@ var ShadertoyChannels = (function() {
         return { texture: entry.texture, resolution: [entry.width, entry.height, 1], time: t, status: statuses[key] };
     }
 
-    function makeVideoEntry(gl, channel, src, key) {
+    function makeVideoEntry(gl, channel, src, key, fromUrl) {
         statuses[key] = { state: 'loading', message: 'Loading video...', kind: 'video', width: 1, height: 1 };
         var video = document.createElement('video');
         video.muted = true;
         video.loop = true;
         video.playsInline = true;
-        if (channel.url && !channel.dataUrl && !/^(data:|blob:)/.test(channel.url)) video.crossOrigin = 'anonymous';
+        if (fromUrl && !/^(data:|blob:)/i.test(src)) video.crossOrigin = 'anonymous';
         var entry = { video: video, texture: null, width: 1, height: 1, ready: false };
         video.onloadeddata = function() {
             entry.width = video.videoWidth || 1;
@@ -431,17 +687,32 @@ var ShadertoyChannels = (function() {
         }
     }
 
+    // Returns false when the frame cannot be uploaded (e.g. a cross-origin
+    // video without CORS taints WebGL and texImage2D throws).
     function uploadVideoFrame(gl, entry, channel) {
-        if (!entry.texture) return;
-        gl.bindTexture(gl.TEXTURE_2D, entry.texture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, channel.sampler && channel.sampler.vflip ? 1 : 0);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.video);
-        applySampler(gl, entry.texture, entry.width, entry.height, channel.sampler, {});
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+        if (!entry.texture) return true;
+        var ok = true;
+        try {
+            gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, channel.sampler && channel.sampler.vflip ? 1 : 0);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.video);
+            applySampler(gl, entry.texture, entry.width, entry.height, channel.sampler, {});
+        } catch (err) {
+            ok = false;
+        }
+        try { gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0); } catch (err2) { /* noop */ }
+        return ok;
     }
 
     function resolveWebcam(gl, channel, fallback, options) {
+        if (!mediaArmed.webcam) {
+            // Imported/restored webcam channel: never start the camera
+            // without a click in this session.
+            if (!statuses.webcam || !statuses.webcam.gated) statuses.webcam = mediaGateStatus('webcam');
+            return fallbackResult(fallback, statuses.webcam);
+        }
         if (webcamEntry && webcamEntry.ready) {
+            if (!webcamEntry.texture) webcamEntry.texture = gl.createTexture();
             updateVideoPlayback(webcamEntry.video);
             uploadVideoFrame(gl, webcamEntry, channel);
             return {
@@ -492,7 +763,17 @@ var ShadertoyChannels = (function() {
     }
 
     function resolveMicrophone(gl, channel, fallback, options) {
+        if (!mediaArmed.microphone) {
+            if (!statuses.microphone || !statuses.microphone.gated) statuses.microphone = mediaGateStatus('microphone');
+            return fallbackResult(fallback, statuses.microphone);
+        }
         if (microphoneEntry && microphoneEntry.ready) {
+            if (!microphoneEntry.texture) {
+                microphoneEntry.texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, microphoneEntry.texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, microphoneEntry.data);
+                applySampler(gl, microphoneEntry.texture, 512, 2, { filter: 'linear', wrap: 'clamp' }, {});
+            }
             if (!mediaPaused || !microphoneFilled) {
                 fillMicrophoneData(microphoneEntry);
                 microphoneFilled = true;
@@ -604,33 +885,97 @@ var ShadertoyChannels = (function() {
         });
     }
 
+    // A pending getUserMedia request is abandoned by clearing the entry: its
+    // .then() sees webcamEntry !== entry and stops the late stream.
+    function releaseWebcam() {
+        if (!webcamEntry) return false;
+        stopStream(webcamEntry.stream);
+        if (webcamEntry.video) {
+            try { webcamEntry.video.pause(); } catch (err) { /* noop */ }
+            try { webcamEntry.video.srcObject = null; } catch (err2) { /* noop */ }
+        }
+        if (webcamEntry.texture && glRef) {
+            try { glRef.deleteTexture(webcamEntry.texture); } catch (err3) { /* noop */ }
+        }
+        webcamEntry = null;
+        statuses.webcam = { state: 'none', message: '', kind: 'webcam', width: 1, height: 1 };
+        return true;
+    }
+
+    function releaseMicrophone() {
+        if (!microphoneEntry) return false;
+        stopStream(microphoneEntry.stream);
+        if (microphoneEntry.source && microphoneEntry.source.disconnect) {
+            try { microphoneEntry.source.disconnect(); } catch (err) { /* noop */ }
+        }
+        if (microphoneEntry.context && microphoneEntry.context.close) {
+            try {
+                var closing = microphoneEntry.context.close();
+                if (closing && closing.catch) closing.catch(function() {});
+            } catch (err2) { /* noop */ }
+        }
+        if (microphoneEntry.texture && glRef) {
+            try { glRef.deleteTexture(microphoneEntry.texture); } catch (err3) { /* noop */ }
+        }
+        microphoneEntry = null;
+        microphoneFilled = false;
+        statuses.microphone = { state: 'none', message: '', kind: 'microphone', width: 512, height: 2 };
+        return true;
+    }
+
     function releaseUserMedia() {
-        if (webcamEntry) {
-            stopStream(webcamEntry.stream);
-            if (webcamEntry.video) {
-                try { webcamEntry.video.pause(); } catch (err) { /* noop */ }
-                webcamEntry.video.srcObject = null;
+        releaseWebcam();
+        releaseMicrophone();
+        notify();
+    }
+
+    // Drops every GL object (and the statuses that vouch for them) after a
+    // context loss/restore so channels are recreated lazily on next resolve.
+    // Webcam/microphone streams are kept; only their textures are recreated.
+    function reset(gl) {
+        glRef = gl || glRef;
+        for (var key in cache) {
+            var entry = cache[key];
+            if (entry && entry.video) {
+                entry.video.onloadeddata = null;
+                entry.video.onerror = null;
+                try { entry.video.pause(); } catch (err) { /* noop */ }
             }
-            webcamEntry = null;
-            statuses.webcam = { state: 'none', message: '', kind: 'webcam', width: 1, height: 1 };
         }
-        if (microphoneEntry) {
-            stopStream(microphoneEntry.stream);
-            if (microphoneEntry.context && microphoneEntry.context.close) {
-                try { microphoneEntry.context.close(); } catch (err) { /* noop */ }
-            }
-            microphoneEntry = null;
-            microphoneFilled = false;
-            statuses.microphone = { state: 'none', message: '', kind: 'microphone', width: 512, height: 2 };
-        }
+        cache = {};
+        var kept = {};
+        if (statuses.webcam) kept.webcam = statuses.webcam;
+        if (statuses.microphone) kept.microphone = statuses.microphone;
+        statuses = kept;
+        keyboardTexture = null;
+        audioTexture = null;
+        audioFilled = false;
+        microphoneFilled = false;
+        if (webcamEntry) webcamEntry.texture = null;
+        if (microphoneEntry) microphoneEntry.texture = null;
         notify();
     }
 
     function getStatus(channel) {
-        if (channel && channel.kind === 'webcam') return statuses.webcam || { state: 'none', message: '' };
-        if (channel && channel.kind === 'microphone') return statuses.microphone || { state: 'none', message: '' };
+        if (channel && (channel.kind === 'webcam' || channel.kind === 'microphone')) {
+            if (!mediaArmed[channel.kind]) return mediaGateStatus(channel.kind);
+            return statuses[channel.kind] || { state: 'none', message: '' };
+        }
         if (channel && channel.kind === 'unsupported') return { state: 'error', message: channel.message || 'Unsupported Shadertoy input source.', kind: 'unsupported', width: 1, height: 1 };
+        if (channel && (channel.kind === 'image' || (channel.kind === 'video' && channel.sourceId !== 'demo'))) {
+            var check = checkSource(channel);
+            if (check.status && check.verdict !== 'allow') return check.status;
+        }
         return statuses[channelKey(channel)] || { state: 'none', message: '' };
+    }
+
+    // Image-channel preview source that is safe to show without a network
+    // request (data:/same-session blob: only), or '' when none.
+    function previewSource(channel) {
+        if (!channel || channel.kind !== 'image') return '';
+        var check = checkSource(channel);
+        if (check.verdict !== 'allow' || !/^(data:image\/|blob:)/i.test(check.src)) return '';
+        return check.src;
     }
 
     function getProceduralNames() {
@@ -644,6 +989,17 @@ var ShadertoyChannels = (function() {
         getProceduralNames: getProceduralNames,
         onStatusChange: onStatusChange,
         setPaused: setPaused,
-        releaseUserMedia: releaseUserMedia
+        releaseUserMedia: releaseUserMedia,
+        releaseUnusedMedia: releaseUnusedMedia,
+        allowMedia: allowMedia,
+        isMediaAllowed: isMediaAllowed,
+        revokeMedia: revokeMedia,
+        allowUrl: allowUrl,
+        registerBlobUrl: registerBlobUrl,
+        revokeBlobUrl: revokeBlobUrl,
+        classifyUrl: classifyUrl,
+        checkSource: checkSource,
+        previewSource: previewSource,
+        reset: reset
     };
 })();

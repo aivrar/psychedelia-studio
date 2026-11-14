@@ -67,7 +67,7 @@ vec3 starfield(vec3 dir, float twinkle) {
             col += mix(vec3(1.0, 0.85, 0.7), vec3(0.7, 0.85, 1.0), fract(h * 7.0)) * b;
         }
     }
-    float neb = snoise2(sph * 1.3 + 7.0) * 0.5 + 0.5;
+    float neb = clamp(snoise2(sph * 1.3 + 7.0) * 0.5 + 0.5, 0.0, 1.0);
     col += vec3(0.25, 0.08, 0.35) * pow(neb, 3.0) * 0.25 + vec3(0.05, 0.1, 0.2) * pow(1.0 - neb, 4.0) * 0.2;
     return col;
 }

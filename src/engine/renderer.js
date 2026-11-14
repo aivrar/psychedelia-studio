@@ -29,6 +29,7 @@ var Renderer = (function() {
     var animFrameId = null;
     var gpuInfo = { renderer: '', vendor: '', maxTex: 0 };
     var contextLost = false;
+    var runningBeforeLoss = true;
     var lastRenderSubmitMs = 0;
     var lastRenderFinishMs = 0;
     var renderCostEmaMs = 0;
@@ -228,7 +229,9 @@ var Renderer = (function() {
     }
 
     // --- Render Loop ---
+    var frameRequests = 0;
     function requestFrame(delay) {
+        frameRequests++;
         // Offline frames do not need to wait for a screen refresh. A task per
         // frame still yields to controls, encoder callbacks and cancellation.
         if (frameExportState) {
@@ -238,7 +241,23 @@ var Renderer = (function() {
         }
     }
 
+    // An exception anywhere in a frame must never stop the loop. renderFrame
+    // schedules its own next frame (with its own pacing delay) on every path
+    // that completes; only when it threw before doing so is one requested here.
     function renderLoop(timestamp) {
+        var requestsBefore = frameRequests;
+        try {
+            renderFrame(timestamp);
+        } catch (err) {
+            reportRenderError('frame', err);
+            if (frameExportState && typeof VideoExport !== 'undefined' && VideoExport.failRecording) {
+                try { VideoExport.failRecording('Rendering failed: ' + err.message); } catch (failErr) { console.error(failErr); }
+            }
+        }
+        if (frameRequests === requestsBefore) requestFrame();
+    }
+
+    function renderFrame(timestamp) {
         if (contextLost) {
             requestFrame(50);
             return;
@@ -760,7 +779,16 @@ var Renderer = (function() {
     // Effects that compile one shader variant per mode: use the variant for
     // the current control values, compiling it in the background when it is
     // new. Until it is ready the previous variant keeps rendering.
+    // A compile cannot be cancelled once started and takes seconds, so a new
+    // variant is only compiled once it has been asked for continuously for
+    // VARIANT_SETTLE_MS: arrowing through a mode list or pressing Randomize
+    // repeatedly compiles only the mode that is finally kept.
+    var VARIANT_SETTLE_MS = 250;
+    var VARIANT_GAP_MS = 500;
     var variantStatusKey = '';
+    var variantRequestKey = '';
+    var variantRequestMs = 0;
+    var variantSeenMs = 0;
 
     function resolveVariantProgram(effect, params) {
         if (!effect.specialize || !effect.shader || typeof EffectRegistry === 'undefined' || !EffectRegistry.specFor) {
@@ -769,6 +797,7 @@ var Renderer = (function() {
         var spec = EffectRegistry.specFor(effect, params);
         var program = ShaderManager.getProgram(effect.name, spec);
         if (program) {
+            variantRequestKey = '';
             if (variantStatusKey) {
                 variantStatusKey = '';
                 EffectRegistry.setCompileStatus(null);
@@ -776,10 +805,24 @@ var Renderer = (function() {
             currentProgram = program;
             return program;
         }
-        if (ShaderManager.hasFailed(effect.name, spec)) return currentProgram;
+        if (ShaderManager.hasFailed(effect.name, spec)) {
+            variantRequestKey = '';
+            // The background compile this pill was announcing failed: clear
+            // it and say so once (the key is not re-announced after a failure).
+            if (variantStatusKey && variantStatusKey === ShaderManager.specKey(effect.name, spec)) {
+                variantStatusKey = '';
+                EffectRegistry.setCompileStatus(null);
+                if (typeof window !== 'undefined' && window.PsychedeliaNotify) {
+                    window.PsychedeliaNotify('Could not compile ' + (variantModeName(effect, spec) || effect.label) +
+                        '. The previous mode is still shown.', 'error');
+                }
+            }
+            return currentProgram;
+        }
         if (frameExportState || (typeof window !== 'undefined' && window.__psySyncSwitch)) {
             // Automated tools: compile immediately so no background compiles
             // linger into the next test step.
+            variantRequestKey = '';
             program = ShaderManager.createProgram(effect.shader, effect.name, spec);
             if (program) {
                 currentProgram = program;
@@ -789,16 +832,31 @@ var Renderer = (function() {
         }
         var key = ShaderManager.specKey(effect.name, spec);
         if (!ShaderManager.isCompiling(effect.name, spec)) {
+            // Count from the first frame this variant was asked for; a gap
+            // in the requests (another effect or variant was shown) restarts it.
+            var nowMs = performance.now();
+            if (variantRequestKey !== key || nowMs - variantSeenMs > VARIANT_GAP_MS) {
+                variantRequestKey = key;
+                variantRequestMs = nowMs;
+            }
+            variantSeenMs = nowMs;
+            // Until then the current program keeps rendering, and the pill
+            // keeps whatever it showed: it names a mode only once that mode
+            // is really compiling, so it does not flicker while browsing.
+            if (nowMs - variantRequestMs < VARIANT_SETTLE_MS) return currentProgram;
+            variantRequestKey = '';
             ShaderManager.createProgramAsync(effect.shader, effect.name, null, spec);
         }
         if (variantStatusKey !== key) {
             variantStatusKey = key;
-            var modeName = '';
-            var param = (effect.params || []).filter(function(p) { return p.name === effect.specialize[0]; })[0];
-            if (param && param.options) modeName = param.options[spec[param.name]] || '';
-            EffectRegistry.setCompileStatus('Compiling ' + (modeName || effect.label) + '…');
+            EffectRegistry.setCompileStatus('Compiling ' + (variantModeName(effect, spec) || effect.label) + '…');
         }
         return currentProgram;
+    }
+
+    function variantModeName(effect, spec) {
+        var param = (effect.params || []).filter(function(p) { return p.name === effect.specialize[0]; })[0];
+        return param && param.options ? param.options[spec[param.name]] || '' : '';
     }
 
     function renderGPU(effect, time, dt) {
@@ -875,7 +933,7 @@ var Renderer = (function() {
             effect.setUniforms(gl, activeProgram, params || {}, getUniformLocationCached, time);
         }
         if (effect.diveTargets && typeof DiveTargets !== 'undefined') {
-            DiveTargets.apply(gl, activeProgram, effect, params, getUniformLocationCached);
+            DiveTargets.apply(gl, activeProgram, effect, params, getUniformLocationCached, !!frameExportState);
         }
         if (effect.paletteParams && effect.paletteParams.length && typeof PsyPalettes !== 'undefined') {
             PsyPalettes.bindForEffect(gl, activeProgram, effect, params, getUniformLocationCached);
@@ -986,6 +1044,7 @@ var Renderer = (function() {
 
     function handleContextLost(e) {
         e.preventDefault();
+        if (!contextLost) runningBeforeLoss = running;
         contextLost = true;
         running = false;
         if (isRecordingActive() && VideoExport.failRecording) VideoExport.failRecording('The graphics context was lost during recording. Try a lower resolution.');
@@ -1018,11 +1077,13 @@ var Renderer = (function() {
             if (typeof EffectRegistry !== 'undefined' && EffectRegistry.reloadCurrent) EffectRegistry.reloadCurrent();
         }
         updateBadge();
-        running = true;
+        // Resume only if the animation was playing before the loss; a
+        // paused animation stays paused.
+        running = runningBeforeLoss;
     }
 
-    function play() { running = true; }
-    function pause() { running = false; }
+    function play() { running = true; runningBeforeLoss = true; }
+    function pause() { running = false; runningBeforeLoss = false; }
     function isRunning() { return running; }
     function beginFrameExport(exportFps) {
         if (contextLost) throw new Error('The graphics context is unavailable.');

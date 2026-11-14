@@ -1468,6 +1468,10 @@ var ShadertoyEditor = (function() {
             };
             if (next.kind === 'buffer') next.sourceId = next.sourceId || 'bufferA';
             if (next.kind === 'procedural') next.sourceId = next.sourceId || 'checker';
+            // Choosing camera/mic here is the user action that allows it.
+            if ((next.kind === 'webcam' || next.kind === 'microphone') && typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.allowMedia) {
+                ShadertoyChannels.allowMedia(next.kind);
+            }
             updateChannel(slot, next);
         });
         head.appendChild(kind);
@@ -1493,16 +1497,45 @@ var ShadertoyEditor = (function() {
         var statusInfo = typeof ShadertoyChannels !== 'undefined' ? ShadertoyChannels.getStatus(channel) : { state: 'none', message: '' };
         status.textContent = statusInfo.message || statusInfo.state || '';
         status.classList.toggle('error', statusInfo.state === 'error');
+        if (statusInfo.action) status.appendChild(buildChannelAction(statusInfo.action));
         row.appendChild(status);
 
         return row;
+    }
+
+    // "Enable camera" / "Load <host>" button for channels that need a click
+    // before they may start (imported camera/mic or local-network URLs).
+    function buildChannelAction(action) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'sm-btn shadertoy-channel-action';
+        button.textContent = action.label || 'Enable';
+        button.addEventListener('click', function() {
+            if (typeof ShadertoyChannels === 'undefined') return;
+            if (action.type === 'media' && ShadertoyChannels.allowMedia) ShadertoyChannels.allowMedia(action.kind);
+            else if (action.type === 'url' && ShadertoyChannels.allowUrl) ShadertoyChannels.allowUrl(action.url);
+            refreshChannels();
+        });
+        return button;
+    }
+
+    // CSS url() string with every character that could end the string or
+    // the declaration hex-escaped, so a crafted value cannot break out.
+    function cssUrl(src) {
+        return 'url("' + String(src).replace(/[^A-Za-z0-9+\/=:;,.%_\-]/g, function(c) {
+            return '\\' + c.charCodeAt(0).toString(16) + ' ';
+        }) + '")';
     }
 
     function paintPreview(preview, channel) {
         preview.textContent = '';
         preview.style.backgroundImage = '';
         if (channel.kind === 'image' && channel.dataUrl) {
-            preview.style.backgroundImage = 'url("' + channel.dataUrl.replace(/"/g, '%22') + '")';
+            // Only data:image / same-session blob: sources (never a network
+            // fetch) are previewed; anything else shows a label.
+            var previewSrc = typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.previewSource ? ShadertoyChannels.previewSource(channel) : '';
+            if (previewSrc) preview.style.backgroundImage = cssUrl(previewSrc);
+            else preview.textContent = channel.url ? 'URL' : 'Ignored';
             return;
         }
         if (channel.kind === 'image' && channel.url) {
@@ -1623,6 +1656,9 @@ var ShadertoyEditor = (function() {
             button.className = 'sm-btn';
             button.textContent = 'Load';
             button.addEventListener('click', function() {
+                // Typing a URL and pressing Load is the user's confirmation,
+                // including for local-network hosts.
+                if (typeof ShadertoyChannels !== 'undefined' && ShadertoyChannels.allowUrl) ShadertoyChannels.allowUrl(url.value);
                 var next = cloneChannel(channel);
                 next.kind = channel.kind;
                 next.url = url.value;

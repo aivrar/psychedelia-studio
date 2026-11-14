@@ -9,31 +9,67 @@
  *
  * Effects opt in with `diveTargets: { kind, ... }` on their definition; the
  * renderer calls DiveTargets.apply() before drawing.
+ *
+ * The search takes up to about half a second for some effects, so in the
+ * interactive preview it runs as a resumable job in slices of a few ms
+ * between frames; the previous table keeps being served until the new one
+ * is complete. Frame export and automation (__psySyncSwitch) still compute
+ * synchronously, as before. Both give the same table for the same inputs.
  */
 var DiveTargets = (function() {
     'use strict';
 
     var TABLE_SIZE = 12;
-    var states = {}; // effect name -> { key, table, count, pendingKey, timer }
+    var SLICE_MS = 6;
+    // effect name -> { key, table, count, pendingKey, timer, job, jobKey }
+    var states = {};
+    var lastSyncHint = false;
 
+    function nowMs() {
+        return typeof performance !== 'undefined' ? performance.now() : Date.now();
+    }
+
+    // The formula is picked once per point rather than on every iteration;
+    // each branch does exactly the arithmetic it did inside the loop.
     function escapeCount(kind, cx, cy, maxIter, power) {
-        var x = 0, y = 0;
-        for (var i = 0; i < maxIter; i++) {
-            var nx, ny;
-            if (kind === 'mandelbrot') {
+        var x = 0, y = 0, nx, ny, i;
+        if (kind === 'mandelbrot') {
+            for (i = 0; i < maxIter; i++) {
                 nx = x * x - y * y + cx;
                 ny = 2 * x * y + cy;
-            } else if (kind === 'burning_ship') {
+                x = nx;
+                y = ny;
+                if (x * x + y * y > 256) return i + 1;
+            }
+            return -1;
+        }
+        if (kind === 'burning_ship') {
+            for (i = 0; i < maxIter; i++) {
                 var ax = Math.abs(x), ay = Math.abs(y);
                 nx = ax * ax - ay * ay + cx;
                 ny = 2 * ax * ay + cy;
-            } else if (kind === 'tricorn' && power === 2) {
+                x = nx;
+                y = ny;
+                if (x * x + y * y > 256) return i + 1;
+            }
+            return -1;
+        }
+        if (kind === 'tricorn' && power === 2) {
+            for (i = 0; i < maxIter; i++) {
                 nx = x * x - y * y + cx;
                 ny = -2 * x * y + cy;
-            } else if (power === Math.round(power) && power <= 8) {
-                // Integer powers: repeated complex multiply (much faster than
-                // the polar form, same result).
-                var zy = kind === 'tricorn' ? -y : y;
+                x = nx;
+                y = ny;
+                if (x * x + y * y > 256) return i + 1;
+            }
+            return -1;
+        }
+        var conj = kind === 'tricorn';
+        if (power === Math.round(power) && power <= 8) {
+            // Integer powers: repeated complex multiply (much faster than
+            // the polar form, same result).
+            for (i = 0; i < maxIter; i++) {
+                var zy = conj ? -y : y;
                 var px = x, py = zy;
                 for (var k = 1; k < power; k++) {
                     var tx = px * x - py * zy;
@@ -42,16 +78,21 @@ var DiveTargets = (function() {
                 }
                 nx = px + cx;
                 ny = py + cy;
-            } else {
-                // multibrot / tricorn with a real power, matching the shaders'
-                // polar form (tricorn conjugates first).
-                var yy = kind === 'tricorn' ? -y : y;
-                var r = Math.sqrt(x * x + yy * yy);
-                var a = Math.atan2(yy, x);
-                var rp = Math.pow(r, power);
-                nx = rp * Math.cos(a * power) + cx;
-                ny = rp * Math.sin(a * power) + cy;
+                x = nx;
+                y = ny;
+                if (x * x + y * y > 256) return i + 1;
             }
+            return -1;
+        }
+        // multibrot / tricorn with a real power, matching the shaders'
+        // polar form (tricorn conjugates first).
+        for (i = 0; i < maxIter; i++) {
+            var yy = conj ? -y : y;
+            var r = Math.sqrt(x * x + yy * yy);
+            var a = Math.atan2(yy, x);
+            var rp = Math.pow(r, power);
+            nx = rp * Math.cos(a * power) + cx;
+            ny = rp * Math.sin(a * power) + cy;
             x = nx;
             y = ny;
             if (x * x + y * y > 256) return i + 1;
@@ -108,35 +149,70 @@ var DiveTargets = (function() {
         return std * (1 - Math.abs(insideFrac - 0.25) * 0.6) * noiseFactor;
     }
 
-    function search(opts) {
+    // The boundary search as a resumable job. run(deadline) works until
+    // nowMs() reaches deadline (Infinity: to the end) and returns true once
+    // the result is ready. The steps and the random sequence are the same
+    // however the work is sliced, so the result is too.
+    function createSearch(opts) {
         var kind = opts.kind;
         var maxIter = Math.max(60, Math.min(900, Math.round(opts.maxIter)));
         var power = opts.power || 2;
         var depth = Math.max(1, opts.depth);
         var h = 1.5 * Math.pow(2, -depth);
+        var hHalf = h * Math.pow(2, depth * 0.5);
         var rand = mulberry(Math.floor((opts.seed || 1) * 1000) + 17);
         var found = [];
         var radii = opts.radii || [0.22, 0.6, 1.6];
-        for (var ri = 0; ri < radii.length && found.length < TABLE_SIZE; ri++) {
-            var radius = radii[ri];
-            var candidates = [];
-            for (var k = 0; k < 1800; k++) {
+        var ri = 0, radius = 0, k = 0, c = 0;
+        var candidates = null, scored = null;
+        var phase = 'radius';
+        var done = false;
+
+        function startRadius() {
+            if (ri >= radii.length || found.length >= TABLE_SIZE) {
+                // Shuffle so the journey order varies with the seed.
+                for (var z = found.length - 1; z > 0; z--) {
+                    var w = Math.floor(rand() * (z + 1));
+                    var tmp = found[z]; found[z] = found[w]; found[w] = tmp;
+                }
+                done = true;
+                return;
+            }
+            radius = radii[ri];
+            candidates = [];
+            k = 0;
+            phase = 'sample';
+        }
+
+        // Up to 100 random points; once all 1800 are in, keep the 160 that
+        // escape latest (escaping late = close to the boundary).
+        function sampleSome() {
+            var end = Math.min(1800, k + 100);
+            for (; k < end; k++) {
                 var ang = rand() * Math.PI * 2;
                 var rr = Math.sqrt(rand()) * radius;
                 var cx = opts.centerX + Math.cos(ang) * rr;
                 var cy = opts.centerY + Math.sin(ang) * rr;
                 var e = escapeCount(kind, cx, cy, maxIter, power);
-                // Escaping late = close to the boundary.
                 if (e > maxIter * 0.18) candidates.push({ x: cx, y: cy, e: e });
             }
+            if (k < 1800) return;
             candidates.sort(function(a, b) { return b.e - a.e; });
             candidates = candidates.slice(0, 160);
-            var scored = [];
-            for (var c = 0; c < candidates.length; c++) {
+            scored = [];
+            c = 0;
+            phase = 'score';
+        }
+
+        // One candidate; after the last, pick well separated targets.
+        function scoreOne() {
+            if (c < candidates.length) {
                 var s = detailScore(kind, candidates[c].x, candidates[c].y, h, maxIter, power);
                 // Also want structure halfway down the dive.
-                if (s > 0) s += 0.5 * detailScore(kind, candidates[c].x, candidates[c].y, h * Math.pow(2, depth * 0.5), maxIter, power);
+                if (s > 0) s += 0.5 * detailScore(kind, candidates[c].x, candidates[c].y, hHalf, maxIter, power);
                 if (s > 0.08) scored.push({ x: candidates[c].x, y: candidates[c].y, s: s });
+                c++;
+                return;
             }
             scored.sort(function(a, b) { return b.s - a.s; });
             var minSep = Math.max(radius * 0.06, h * 40);
@@ -148,17 +224,35 @@ var DiveTargets = (function() {
                 }
                 if (ok) found.push([scored[q].x, scored[q].y]);
             }
+            ri++;
+            phase = 'radius';
         }
-        // Shuffle so the journey order varies with the seed.
-        for (var z = found.length - 1; z > 0; z--) {
-            var w = Math.floor(rand() * (z + 1));
-            var tmp = found[z]; found[z] = found[w]; found[w] = tmp;
+
+        function run(deadline) {
+            var timed = deadline !== Infinity;
+            while (!done) {
+                if (phase === 'radius') startRadius();
+                else if (phase === 'sample') sampleSome();
+                else scoreOne();
+                if (timed && nowMs() >= deadline) break;
+            }
+            return done;
         }
-        return found;
+
+        return {
+            run: run,
+            result: function() { return done ? found : null; }
+        };
+    }
+
+    function search(opts) {
+        var job = createSearch(opts);
+        job.run(Infinity);
+        return job.result();
     }
 
     function stateFor(name) {
-        if (!states[name]) states[name] = { key: '', table: null, count: 0, pendingKey: '', timer: null };
+        if (!states[name]) states[name] = { key: '', table: null, count: 0, pendingKey: '', timer: null, job: null, jobKey: '' };
         return states[name];
     }
 
@@ -180,8 +274,9 @@ var DiveTargets = (function() {
             opts.depth, Math.round(opts.maxIter), opts.seed.toFixed(3), opts.offsetX || 0, opts.offsetY || 0].join('|');
     }
 
-    function compute(state, opts, key) {
-        var targets = search(opts);
+    // Table, count and key are replaced together, so a reader never sees a
+    // mix of two searches.
+    function finish(state, opts, key, targets) {
         var table = new Float32Array(TABLE_SIZE * 2);
         for (var i = 0; i < TABLE_SIZE; i++) {
             var t = targets.length ? targets[i % targets.length] : [opts.centerX, opts.centerY];
@@ -193,40 +288,146 @@ var DiveTargets = (function() {
         state.key = key;
     }
 
+    function compute(state, opts, key) {
+        cancelJob(state);
+        finish(state, opts, key, search(opts));
+    }
+
+    function cancelJob(state) {
+        state.job = null;
+        state.jobKey = '';
+    }
+
+    // MessageChannel tasks are not clamped to 4 ms like nested timers, so a
+    // sliced search takes about its CPU time while frames and input events
+    // still run between slices.
+    var channel = null;
+    var channelQueue = [];
+    function schedule(fn) {
+        if (typeof MessageChannel === 'undefined') {
+            setTimeout(fn, 0);
+            return;
+        }
+        if (!channel) {
+            channel = new MessageChannel();
+            channel.port1.onmessage = function() {
+                var next = channelQueue.shift();
+                if (next) next();
+            };
+            // Node only (tools): an open port would keep the process alive.
+            if (channel.port1.unref) channel.port1.unref();
+        }
+        channelQueue.push(fn);
+        channel.port2.postMessage(0);
+    }
+
+    // Search in slices of SLICE_MS. A newer key or a synchronous compute
+    // replaces state.job, which stops this one at its next slice; so does
+    // leaving the effect (the next apply() for it starts again).
+    function startJob(state, def, opts, key) {
+        var job = createSearch(opts);
+        state.job = job;
+        state.jobKey = key;
+        function slice() {
+            if (state.job !== job) return;
+            if (typeof EffectRegistry !== 'undefined' && EffectRegistry.getCurrent && EffectRegistry.getCurrent() !== def) {
+                cancelJob(state);
+                return;
+            }
+            var ready = false;
+            try {
+                ready = job.run(nowMs() + SLICE_MS);
+            } catch (err) {
+                cancelJob(state);
+                console.error(err);
+                return;
+            }
+            if (!ready) {
+                schedule(slice);
+                return;
+            }
+            cancelJob(state);
+            finish(state, opts, key, job.result());
+        }
+        schedule(slice);
+    }
+
+    // Frame export and automation need the table for the current settings on
+    // the frame they ask for it, as before.
+    function isSync(hint) {
+        return !!hint || (typeof window !== 'undefined' && !!window.__psySyncSwitch) ||
+            (typeof VideoExport !== 'undefined' && !!VideoExport.isFrameExport && !!VideoExport.isFrameExport());
+    }
+
     // Upload the target table; recompute (debounced) when inputs change.
-    function apply(gl, program, def, params, getLocation) {
+    // `sync` (frame export) computes on this frame instead of in slices.
+    function apply(gl, program, def, params, getLocation, sync) {
         if (!def || !def.diveTargets || !params) return;
         var countLoc = getLocation(program, 'u_dive_count');
         if (countLoc === null) return;
         var state = stateFor(def.name);
-        var opts = optionsFor(def, params);
+        // Search on the user's own settings: Beat Reactor links modulate the
+        // render values every frame, which would change the key constantly
+        // and keep the debounced refresh from ever running.
+        var base = typeof Controls !== 'undefined' && Controls.getBaseValues && typeof EffectRegistry !== 'undefined' &&
+            EffectRegistry.getCurrent && EffectRegistry.getCurrent() === def ? Controls.getBaseValues() : null;
+        var opts = optionsFor(def, base || params);
         if (!opts) {
             gl.uniform1f(countLoc, 0);
             return;
         }
         var key = keyOf(opts);
-        if (key !== state.key) {
-            var now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-            var rapid = now - (state.lastChangeMs || 0) < 300;
-            if (state.pendingKey !== key) state.lastChangeMs = now;
-            if (!state.table || (!rapid && !state.timer)) {
-                // First frame or a one-off change (preset, dropdown): compute
-                // now so the dive stays consistent from this frame on.
-                compute(state, opts, key);
-            } else if (state.pendingKey !== key) {
-                state.pendingKey = key;
+        lastSyncHint = !!sync;
+        var now, rapid;
+        if (isSync(sync)) {
+            // Export / automation must be deterministic: no debounce, and no
+            // sliced job or timer from the preview may swap a table in later.
+            // Every frame uses the table for exactly its own settings.
+            if (state.job) cancelJob(state);
+            if (state.timer) clearTimeout(state.timer);
+            state.timer = null;
+            state.pendingKey = '';
+            if (key !== state.key) compute(state, opts, key);
+        } else if (key === state.key) {
+            // Back on the settings the shown table belongs to: drop any work
+            // for settings that were passed through.
+            if (state.job || state.timer) {
+                cancelJob(state);
                 if (state.timer) clearTimeout(state.timer);
-                state.timer = setTimeout(function() {
-                    state.timer = null;
-                    compute(state, opts, key);
-                    state.pendingKey = '';
-                }, 160);
+                state.timer = null;
+                state.pendingKey = '';
+            }
+        } else if (key !== state.jobKey) {
+            // New settings: the old table (or, for the first search, the
+            // shader's own drift path) is served until the new one is ready.
+            if (state.job) cancelJob(state);
+            now = nowMs();
+            rapid = now - (state.lastChangeMs || 0) < 300;
+            if (state.pendingKey !== key) state.lastChangeMs = now;
+            if (!rapid && !state.timer) {
+                startJob(state, def, opts, key);
+            } else if (state.pendingKey !== key) {
+                debounce(state, def, opts, key);
             }
         }
         var tableLoc = getLocation(program, 'u_dive_targets[0]');
         if (tableLoc === null) tableLoc = getLocation(program, 'u_dive_targets');
         if (tableLoc !== null && state.table) gl.uniform2fv(tableLoc, state.table);
         gl.uniform1f(countLoc, state.table ? state.count : 0);
+    }
+
+    // Rapid changes in the preview (slider drags): search once the value has
+    // settled. If export or automation started meanwhile, do nothing: the
+    // next synchronous apply() computes the key it actually needs.
+    function debounce(state, def, opts, key) {
+        state.pendingKey = key;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(function() {
+            state.timer = null;
+            state.pendingKey = '';
+            if (isSync(lastSyncHint)) return;
+            startJob(state, def, opts, key);
+        }, 160);
     }
 
     function getTable(name) {
@@ -238,6 +439,7 @@ var DiveTargets = (function() {
         TABLE_SIZE: TABLE_SIZE,
         apply: apply,
         search: search,
+        createSearch: createSearch,
         escapeCount: escapeCount,
         getTable: getTable
     };

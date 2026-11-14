@@ -5,6 +5,34 @@
 var OverlayControls = (function() {
     'use strict';
 
+    // Photosensitivity notes. Warning text only: nothing here limits or gates
+    // any overlay setting. The inline line sits in the overlay's settings
+    // block (rebuilt with the panel); the toast shows once per browser the
+    // first time the user switches the overlay on from this panel.
+    var INLINE_WARNINGS = {
+        strobe: 'Rapid flashing — may affect photosensitive viewers.'
+    };
+    var FIRST_ENABLE_NOTICES = {
+        strobe: 'Strobe produces rapid flashing light, which can trigger seizures in people with photosensitive epilepsy. ' +
+            'Lower the rate or intensity, or switch it off, if anyone watching may be affected.'
+    };
+    var NOTICE_KEY_PREFIX = 'psychedelia.photosensitivityNotice.';
+    var NOTICE_MS = 12000;
+    var noticeShownThisSession = {};
+
+    function showFirstEnableNotice(id) {
+        try {
+            var message = FIRST_ENABLE_NOTICES[id];
+            if (!message || noticeShownThisSession[id] || !window.PsychedeliaNotify) return;
+            noticeShownThisSession[id] = true; // once per page even when storage is blocked
+            try {
+                if (window.localStorage.getItem(NOTICE_KEY_PREFIX + id) === '1') return;
+            } catch (readError) { /* storage unavailable: fall back to once per page */ }
+            window.PsychedeliaNotify(message, 'info', NOTICE_MS);
+            try { window.localStorage.setItem(NOTICE_KEY_PREFIX + id, '1'); } catch (writeError) { /* ignore */ }
+        } catch (e) { /* a notice must never get in the way of the toggle */ }
+    }
+
     function init() {
         var sidebar = document.getElementById('sidebar');
 
@@ -72,6 +100,7 @@ var OverlayControls = (function() {
             Overlays.setEnabled(ov.id, cb.checked);
             paramDiv.style.display = cb.checked ? 'block' : 'none';
             group.classList.toggle('is-on', cb.checked);
+            if (cb.checked) showFirstEnableNotice(ov.id);
         });
 
         toggleRow.appendChild(cb);
@@ -86,6 +115,15 @@ var OverlayControls = (function() {
             toggleRow.appendChild(auto);
         }
         group.appendChild(toggleRow);
+
+        // Always visible (under the enable row, outside the collapsible params
+        // block) so the note is seen before the overlay is switched on.
+        if (INLINE_WARNINGS[ov.id]) {
+            var warning = document.createElement('div');
+            warning.className = 'fx-hint overlay-warning';
+            warning.textContent = INLINE_WARNINGS[ov.id];
+            group.appendChild(warning);
+        }
 
         if (ov.hint) {
             var hint = document.createElement('div');

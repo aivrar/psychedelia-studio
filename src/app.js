@@ -29,6 +29,22 @@
         }, durationMs || 4200);
     }
 
+    // Top-bar Play/Pause highlight follows the renderer. Call after any
+    // play/pause path (also used by the timeline transport).
+    function syncPlayButtons() {
+        var running = Renderer.isRunning();
+        var playBtn = document.getElementById('btnPlay');
+        var pauseBtn = document.getElementById('btnPause');
+        if (playBtn) {
+            playBtn.classList.toggle('active', running);
+            playBtn.setAttribute('aria-pressed', running ? 'true' : 'false');
+        }
+        if (pauseBtn) {
+            pauseBtn.classList.toggle('active', !running);
+            pauseBtn.setAttribute('aria-pressed', running ? 'false' : 'true');
+        }
+    }
+
     function installGlobalErrorHandlers() {
         if (globalErrorHandlersReady) return;
         globalErrorHandlersReady = true;
@@ -90,11 +106,13 @@
 
         // Load first effect, then the last one used (compiled in the background).
         var list = EffectRegistry.getList();
+        // Read the remembered effect before the first switch: that switch fires
+        // UIShell's onSwitch handler, which overwrites the stored value.
+        var last = typeof UIShell !== 'undefined' ? UIShell.lastEffect() : '';
         if (list.length > 0) {
             EffectRegistry.switchTo(list[0].name);
             document.getElementById('effectSelect').value = list[0].name;
         }
-        var last = typeof UIShell !== 'undefined' ? UIShell.lastEffect() : '';
         if (last && last !== list[0].name && EffectRegistry.getDefinition(last)) {
             document.getElementById('effectSelect').value = last;
             EffectRegistry.switchToAsync(last);
@@ -284,15 +302,15 @@
         // Play/Pause
         document.getElementById('btnPlay').addEventListener('click', function() {
             Renderer.play();
-            this.classList.add('active');
-            document.getElementById('btnPause').classList.remove('active');
+            syncPlayButtons();
         });
 
         document.getElementById('btnPause').addEventListener('click', function() {
             Renderer.pause();
-            this.classList.add('active');
-            document.getElementById('btnPlay').classList.remove('active');
+            syncPlayButtons();
         });
+        window.PsychedeliaSyncPlayState = syncPlayButtons;
+        syncPlayButtons();
 
         var uiPriorityMode = document.getElementById('uiPriorityMode');
         if (uiPriorityMode) {
@@ -614,19 +632,74 @@
         });
 
         // Keyboard shortcuts
+        // Space, Enter and the arrows belong to a focused button, link, tab or
+        // other widget (they activate it) when focus got there by keyboard; after a
+        // mouse/touch click they keep their shortcut meaning (Space = play/pause).
+        // Letter shortcuts work from either. Modality is tracked explicitly rather
+        // than via :focus-visible: Tab sets it, any pointer press clears it.
+        var NATIVE_KEY_TARGETS = 'button, a[href], summary, [role="button"], [role="tab"], [role="link"], [contenteditable]:not([contenteditable="false"])';
+        var ALWAYS_NATIVE_KEY_TARGETS = 'summary, [contenteditable]:not([contenteditable="false"])';
+        var focusFromKeyboard = false;
+        function pointerFocus() { focusFromKeyboard = false; }
+        document.addEventListener('pointerdown', pointerFocus, true);
+        document.addEventListener('mousedown', pointerFocus, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Tab') focusFromKeyboard = true; }, true);
+        // While a dialog is open, Space/Enter/arrows must not act on controls outside
+        // it: a focused button would still be activated natively and a header's own
+        // key handler would still run. Capture phase, so this beats handlers on the
+        // focused element itself. Keys whose target is inside the dialog pass through.
         document.addEventListener('keydown', function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+            var arrow = !!e.key && e.key.indexOf('Arrow') === 0;
+            if (e.key !== ' ' && e.key !== 'Enter' && !arrow) return;
+            // Modified arrows are browser shortcuts (Alt+Left = back); modified
+            // Space/Enter would still reach a header's handler, so they are guarded.
+            if (arrow && (e.ctrlKey || e.metaKey || e.altKey)) return;
+            var t = e.target;
+            if (!document.querySelector('.modal:not(.hidden)') || (t.closest && t.closest('.modal:not(.hidden)'))) return;
+            e.preventDefault();
+            e.stopPropagation();
+        }, true);
+        function closeOpenModals() {
+            document.querySelectorAll('.modal').forEach(function(m) {
+                if (m.id === 'galleryModal') Gallery.hide();
+                else m.classList.add('hidden');
+            });
+        }
+        document.addEventListener('keydown', function(e) {
+            var target = e.target;
+            var modalOpen = !!document.querySelector('.modal:not(.hidden)');
+            if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                // Escape closes an open dialog even with a field focused (the field would otherwise swallow it).
+                if (modalOpen && e.key === 'Escape') closeOpenModals();
+                return;
+            }
+            // Behind an open dialog only Escape (close) is a shortcut.
+            if (modalOpen && e.key !== 'Escape') return;
 
+            // Another handler (e.g. a collapsible section header) already used this key.
+            if (e.defaultPrevented) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
-            if (VideoExport.isEditingLocked() && e.key.toLowerCase() !== 'r' && e.key !== 'Escape') return;
+            if (!e.key) return;
+            // Single characters are matched case-insensitively so Caps Lock / Shift still work.
+            var key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            if ((key === ' ' || key === 'Enter' || key.indexOf('Arrow') === 0) && target.closest &&
+                    target.closest(focusFromKeyboard ? NATIVE_KEY_TARGETS : ALWAYS_NATIVE_KEY_TARGETS)) return;
+            // Held keys fire once: otherwise R would toggle recording, P save a PNG and B reshuffle on every repeat.
+            // [ ] and the arrows are included: stepEffect works from the active effect, which only changes when
+            // the background compile finishes, so repeats would just restart the same compile.
+            if (e.repeat) {
+                if (key === ' ' || key === 'ArrowLeft' || key === 'ArrowRight') e.preventDefault();
+                return;
+            }
+            if (VideoExport.isEditingLocked() && key !== 'r' && key !== 'Escape') return;
             var shell = typeof UIShell !== 'undefined' ? UIShell : null;
-            if (shell && /^[1-5]$/.test(e.key)) {
+            if (shell && /^[1-5]$/.test(key)) {
                 var names = shell.tabNames();
-                var tab = names[parseInt(e.key, 10) - 1];
+                var tab = names[parseInt(key, 10) - 1];
                 if (tab) shell.setTab(tab);
                 return;
             }
-            switch(e.key) {
+            switch(key) {
                 case '[':
                 case 'ArrowLeft':
                     if (shell) { e.preventDefault(); shell.stepEffect(-1); }
@@ -648,23 +721,14 @@
                     if (shell) shell.showHelp();
                     break;
                 case 'Escape':
-                    document.querySelectorAll('.modal').forEach(function(m) {
-                        if (m.id === 'galleryModal') Gallery.hide();
-                        else m.classList.add('hidden');
-                    });
+                    closeOpenModals();
                     if (shell && document.body.classList.contains('ui-hidden')) shell.toggleUI(false);
                     break;
                 case ' ':
                     e.preventDefault();
-                    if (Renderer.isRunning()) {
-                        Renderer.pause();
-                        document.getElementById('btnPause').classList.add('active');
-                        document.getElementById('btnPlay').classList.remove('active');
-                    } else {
-                        Renderer.play();
-                        document.getElementById('btnPlay').classList.add('active');
-                        document.getElementById('btnPause').classList.remove('active');
-                    }
+                    if (Renderer.isRunning()) Renderer.pause();
+                    else Renderer.play();
+                    syncPlayButtons();
                     break;
                 case 'f':
                     document.getElementById('btnFullscreen').click();

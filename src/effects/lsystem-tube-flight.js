@@ -295,7 +295,7 @@ void main() {
         vec3 lightDir = normalize(vec3(-0.42, 0.64, 0.55));
         float diff = max(dot(n, lightDir), 0.0);
         float sh = softShadow(p + n * 0.018, lightDir, 0.035, 2.4);
-        float rim = pow(1.0 - max(dot(n, -rd), 0.0), 2.4);
+        float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 2.4);
         float ring = 0.5 + 0.5 * sin((hit.age * 16.0 + hit.branch * 0.63 + t * u_color_speed * 0.42) * 6.28318530718);
         vec3 base = paletteTube(hit.age + t * u_color_speed * 0.045 + hit.branch * 0.05, u_palette);
         if (u_shade_mode >= 0.5 && u_shade_mode < 1.5) {

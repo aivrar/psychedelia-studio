@@ -91,6 +91,13 @@ var ProgressiveDensityRenderer = (function() {
         return typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Texture, Buffer, Program.
+    function drop(gl, kind, obj) {
+        if (obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function compile(gl, type, source, label) {
         var shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -201,15 +208,27 @@ var ProgressiveDensityRenderer = (function() {
     DensityInstance.prototype.init = function(gl) {
         if (!gl) return false;
         activeInstance = this;
-        if (this.gl === gl && this.program && this.texture && this.buffer) return true;
+        // isProgram is false for a program from before a context loss (the gl
+        // object is the same after a restore), so the resources get rebuilt.
+        if (this.gl === gl && this.program && this.texture && this.buffer && gl.isProgram(this.program)) return true;
         this.cleanup(this.gl);
         this.cleaned = false;
         this.gl = gl;
         this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
         this.program = createProgram(gl);
+        // Create the texture/buffer only once the program exists: they are
+        // bound below, and cleanup() only deletes bound (is*() true) objects.
+        if (!this.program) return false;
         this.texture = gl.createTexture();
         this.buffer = gl.createBuffer();
-        if (!this.program || !this.texture || !this.buffer) return false;
+        if (!this.texture || !this.buffer) {
+            // Neither is bound yet, so cleanup()'s is*() guards would skip
+            // them: free whichever one was created here.
+            if (this.texture) gl.deleteTexture(this.texture);
+            if (this.buffer) gl.deleteBuffer(this.buffer);
+            this.texture = null; this.buffer = null;
+            return false;
+        }
 
         gl.bindTexture(gl.TEXTURE_2D, this.texture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -515,9 +534,9 @@ var ProgressiveDensityRenderer = (function() {
         this.workerStatus = 'terminated';
         this.pending = false;
         if (gl) {
-            if (this.texture) gl.deleteTexture(this.texture);
-            if (this.buffer) gl.deleteBuffer(this.buffer);
-            if (this.program) gl.deleteProgram(this.program);
+            drop(gl, 'Texture', this.texture);
+            drop(gl, 'Buffer', this.buffer);
+            drop(gl, 'Program', this.program);
         }
         this.gl = null;
         this.program = null;

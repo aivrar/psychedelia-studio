@@ -51,6 +51,10 @@ vec2 psyViewUV(vec2 uv, float time) {
 }
 
 // --- Noise Functions ---
+// 3D simplex noise (mod289, permute, taylorInvSqrt, snoise) by Ian McEwan and
+// Stefan Gustavson, Ashima Arts: https://github.com/ashima/webgl-noise
+// Copyright (C) 2011 Ashima Arts. All rights reserved. Distributed under the
+// MIT License; see lib/licenses/webgl-noise-LICENSE.txt
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
@@ -147,6 +151,7 @@ vec3 hash3(vec2 p) {
 }
 
 // --- Color Utilities ---
+// hsv2rgb / rgb2hsv after Sam Hocevar (WTFPL): https://stackoverflow.com/a/17897228
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
@@ -366,6 +371,14 @@ void main() {
         var fragPrefix = isWebGL2
             ? '#version 300 es\nprecision highp float;\n#define PSY_TEX2D texture\nin vec2 v_uv;\nout vec4 fragColor;\n'
             : 'precision highp float;\n#define PSY_TEX2D texture2D\nvarying vec2 v_uv;\n';
+        // WebGL1 needs the derivatives extension enabled, as the very first
+        // line, for fwidth/dFdx/dFdy (built in under WebGL2).
+        if (!isWebGL2 && /\b(fwidth|dFdx|dFdy)\s*\(/.test(fragmentSource)) {
+            var gl = Renderer.getGL();
+            if (gl && gl.getExtension('OES_standard_derivatives')) {
+                fragPrefix = '#extension GL_OES_standard_derivatives : enable\n' + fragPrefix;
+            }
+        }
 
         // Replace FRAG_OUT with the correct output variable
         if (isWebGL2) {
@@ -435,6 +448,8 @@ void main() {
         var cacheName = name ? specKey(name, spec) : '';
         // Check cache
         if (cacheName && cache[cacheName]) return cache[cacheName];
+        // Same as createProgramAsync: a variant that failed is not recompiled.
+        if (cacheName && failed[cacheName]) return null;
 
         var sources = buildSources(specializeSource(fragmentSource, spec));
         var vertSrc = sources.vert;
@@ -444,6 +459,8 @@ void main() {
         var fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragSrc);
 
         if (!vertShader || !fragShader) {
+            if (vertShader) gl.deleteShader(vertShader);
+            if (fragShader) gl.deleteShader(fragShader);
             if (cacheName) failed[cacheName] = true;
             return null;
         }
@@ -456,6 +473,8 @@ void main() {
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             console.error('Program link error:', gl.getProgramInfoLog(program));
             gl.deleteProgram(program);
+            gl.deleteShader(vertShader);
+            gl.deleteShader(fragShader);
             if (cacheName) failed[cacheName] = true;
             return null;
         }
@@ -491,6 +510,15 @@ void main() {
         });
     }
 
+    // A job clearCache() dropped (context restore): settle its own callbacks
+    // with null, never touching pending/cache, which may hold a newer job
+    // for the same key.
+    function settleAbandoned(job) {
+        job.callbacks.forEach(function(cb) {
+            try { cb(null); } catch (err) { console.error(err); }
+        });
+    }
+
     function createProgramAsync(fragmentSource, name, callback, spec) {
         var gl = Renderer.getGL();
         callback = callback || function() {};
@@ -500,7 +528,7 @@ void main() {
         if (failed[key]) { callback(null); return; }
         if (pending[key]) { pending[key].callbacks.push(callback); return; }
 
-        pending[key] = { callbacks: [callback] };
+        var job = pending[key] = { callbacks: [callback] };
         var ext = parallelCompileExtension(gl);
 
         if (!ext) {
@@ -508,6 +536,7 @@ void main() {
             // "compiling" notice can paint before the blocking compile.
             requestAnimationFrame(function() {
                 requestAnimationFrame(function() {
+                    if (pending[key] !== job) { settleAbandoned(job); return; }
                     finishPending(key, createProgram(fragmentSource, name, spec));
                 });
             });
@@ -528,11 +557,16 @@ void main() {
         var started = performance.now();
 
         function poll() {
+            // clearCache() (context restore) abandoned this job; its objects
+            // belong to the lost context and a new job may use the same key.
+            if (pending[key] !== job) { settleAbandoned(job); return; }
             if (Renderer.isContextLost && Renderer.isContextLost()) {
                 finishPending(key, null);
                 return;
             }
-            if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR) &&
+            // null = status unknown (e.g. stale extension): fall through to
+            // LINK_STATUS, which waits for the result, instead of spinning.
+            if (gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR) === false &&
                     performance.now() - started < 120000) {
                 setTimeout(poll, 30);
                 return;
@@ -554,6 +588,13 @@ void main() {
             }
             gl.deleteShader(vs);
             gl.deleteShader(fs);
+            if (cache[key]) {
+                // A synchronous compile of the same variant finished first:
+                // keep that one and drop this duplicate instead of leaking it.
+                gl.deleteProgram(program);
+                finishPending(key, cache[key]);
+                return;
+            }
             cache[key] = program;
             finishPending(key, program);
         }
@@ -575,11 +616,15 @@ void main() {
     function clearCache() {
         var gl = Renderer.getGL();
         for (var name in cache) {
-            gl.deleteProgram(cache[name]);
+            // After a context restore these belong to the lost context:
+            // isProgram is false and deleting them would raise INVALID_OPERATION.
+            if (gl && gl.isProgram(cache[name])) gl.deleteProgram(cache[name]);
         }
         cache = {};
         failed = {};
         pending = {};
+        // Extension objects do not survive a context loss; ask again.
+        if (gl) gl._psyParallelExt = undefined;
     }
 
     return {

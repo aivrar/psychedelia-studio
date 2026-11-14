@@ -119,7 +119,7 @@ void main() {
         float rip = (1.0 - smoothstep(10.0, 70.0, tm)) * 0.22;
         vec2 rq = p.xz * 2.3 + vec2(t * 0.9, t * 0.4);
         n = normalize(n + vec3(vnoise(rq) - 0.5, 0.0, vnoise(rq.yx * 1.3 + 5.0) - 0.5) * rip);
-        float fres = clamp(pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * 0.7 + 0.04, 0.0, 1.0);
+        float fres = clamp(pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0) * 0.7 + 0.04, 0.0, 1.0);
         vec3 refl = sky(reflect(rd, n), sunDir, top, horizon, sunCol);
         vec3 water = deep + horizon * 0.025 + vec3(0.05, 0.25, 0.22) * max(h / max(gWaveScale, 0.05) + 0.3, 0.0) * 0.25;
         col = mix(water, refl, fres);

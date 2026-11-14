@@ -237,6 +237,8 @@ var UIShell = (function() {
             }
             head.addEventListener('click', toggle);
             head.addEventListener('keydown', function(e) {
+                // Keys pressed on a nested action button (Reset, Defaults, Suggested) belong to that button.
+                if (e.target !== head) return;
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); }
             });
         });

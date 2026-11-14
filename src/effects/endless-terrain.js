@@ -131,7 +131,7 @@ void main() {
             // Water: sky reflection with a little ripple, darker in deep parts.
             vec3 n = normalize(vec3(sin(p.x * 0.3 + u_time) * 0.02, 1.0, cos(p.z * 0.25 + u_time * 1.3) * 0.02));
             vec3 refl = skyColor(reflect(rd, n), sunDir, sun, skyTop, skyHor, kick);
-            float fres = 0.2 + 0.8 * pow(1.0 - max(dot(n, -rd), 0.0), 4.0);
+            float fres = 0.2 + 0.8 * pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0);
             col = mix(vec3(0.02, 0.06, 0.08), refl, fres);
         } else {
             float e = 0.6 + t * 0.002;

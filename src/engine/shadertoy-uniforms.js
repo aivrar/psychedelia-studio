@@ -74,7 +74,9 @@ var ShadertoyUniforms = (function() {
     }
 
     function onPointerUp(e) {
-        if (!canvas) return;
+        // Only a press that started on the canvas may release iMouse; clicks
+        // elsewhere on the page must not touch it.
+        if (!canvas || !mouseDown) return;
         var p = canvasPointFromEvent(e);
         mouseDown = false;
         state.mouse = [p.x, p.y, signedCoord(clickX, -1), signedCoord(clickY, -1)];

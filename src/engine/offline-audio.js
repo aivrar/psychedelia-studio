@@ -55,6 +55,15 @@ var OfflineAudio = (function() {
             } : null
         };
     }
+    // Run the rendered soundtrack through the live recording's mix stage (music
+    // lift, limiter, ceiling) so a render sounds like a recording of the same thing.
+    function recordMix(raw, music) {
+        var context = new OfflineAudioContext(2, raw.length, raw.sampleRate);
+        var player = context.createBufferSource(), stage = VideoExport.buildRecordMix(context);
+        player.buffer = raw; player.connect(music ? stage.music : stage.input);
+        stage.output.connect(context.destination); player.start(0);
+        return context.startRendering();
+    }
     async function prepare(duration, config) {
         config = config || {};
         if (!(duration > 0) || duration > 600) throw new Error('Smooth MP4 with sound supports clips up to 10 minutes.');
@@ -86,8 +95,9 @@ var OfflineAudio = (function() {
                 if (offset < decoded.duration) player.start(0, offset);
                 buffer = await context.startRendering();
             }
-            var detector = analyser(buffer, source, events, bpm);
-            return { buffer: buffer, analysis: detector.analysis, music: detector.music, restore: restore, source: source };
+            // Reactivity reads the unlifted sound, as live analysis does; only the encoded track is mixed.
+            var detector = analyser(buffer, source, events, bpm), mixed = await recordMix(buffer, source === 'studio');
+            return { buffer: mixed, analysis: detector.analysis, music: detector.music, restore: restore, source: source };
         } catch (error) { restore(); throw error; }
     }
     return { prepare: prepare, analyser: analyser };

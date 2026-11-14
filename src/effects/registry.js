@@ -81,6 +81,9 @@ var EffectRegistry = (function() {
             // A direct switch supersedes any background compile in flight.
             asyncRequest++;
             setCompileStatus(null);
+            // Callers that are not a user's choice (timeline clips, context
+            // restore, setup loads) pass _system; anything else counts as one.
+            if (!opts._system) userRequest++;
         }
 
         var nextEffect = effects[name];
@@ -129,8 +132,9 @@ var EffectRegistry = (function() {
         currentEffect = nextEffect;
         Renderer.setProgram(program);
 
-        // New seed per effect switch
-        Renderer.randomizeSeed();
+        // New seed per effect switch (reloadCurrent keeps the old one)
+        if (opts._seedVec) Renderer.setSeed(opts._seed, opts._seedVec);
+        else Renderer.randomizeSeed();
 
         // Build GUI params
         Controls.buildParams(currentEffect.params || [], currentEffect.fractalFlight || null);
@@ -154,6 +158,7 @@ var EffectRegistry = (function() {
     // switches. Programmatic callers that need the switch to happen
     // immediately keep using switchTo().
     var asyncRequest = 0;
+    var userRequest = 0; // bumped only by switches the user asked for
     var switchListeners = [];
 
     function notifySwitch(name) {
@@ -169,6 +174,7 @@ var EffectRegistry = (function() {
     function switchToAsync(name, opts) {
         var def = effects[name];
         if (!def) return false;
+        userRequest++; // every caller is a UI pick (effect select, next/previous)
         var request = ++asyncRequest;
         var isCpu = Renderer.getMode() === 'cpu';
         var spec = specFor(def, opts && opts.values);
@@ -180,6 +186,17 @@ var EffectRegistry = (function() {
         ShaderManager.createProgramAsync(def.shader, name, function(program) {
             if (request !== asyncRequest) return; // superseded by a newer pick
             setCompileStatus(null);
+            if (!program && currentEffect && !def.cpuRender && !def.render) {
+                // Keep the running effect exactly as it is (values, seed,
+                // history) rather than letting switchTo fall back to it.
+                updateSelect(currentEffect.name);
+                updateDescription(currentEffect);
+                if (window.PsychedeliaNotify && !(Renderer.isContextLost && Renderer.isContextLost())) {
+                    window.PsychedeliaNotify('Could not compile ' + (def.label || name) + '. ' +
+                        (currentEffect.label || currentEffect.name) + ' is still running.', 'error');
+                }
+                return;
+            }
             var switchOpts = {};
             for (var key in (opts || {})) switchOpts[key] = opts[key];
             switchOpts.program = program;
@@ -193,6 +210,15 @@ var EffectRegistry = (function() {
         asyncRequest++;
         setCompileStatus(null);
     }
+
+    // Changes whenever a switch is requested or cancelled (switchTo,
+    // switchToAsync, cancelPendingSwitch): whoever changed it last owns the
+    // compile status pill.
+    function getSwitchToken() { return asyncRequest; }
+    // Changes only when the user asked for an effect (switchToAsync, or
+    // switchTo without _system/_internal); lets a caller that waited tell a
+    // user's pick from timeline or context-restore switches.
+    function getUserSwitchToken() { return userRequest; }
 
     function setCompileStatus(defOrText) {
         var el = document.getElementById('compileStatus');
@@ -239,7 +265,16 @@ var EffectRegistry = (function() {
 
     function reloadCurrent() {
         if (!currentEffect) return false;
-        return switchTo(currentEffect.name);
+        // Context restore: rebuild the program but keep the user's settings,
+        // seed and clock instead of starting the effect afresh.
+        var base = typeof Controls !== 'undefined' && Controls.getBaseValues ? Controls.getBaseValues() : null;
+        var time = Renderer.getUnwrappedTime ? Renderer.getUnwrappedTime() : 0;
+        var ok = switchTo(currentEffect.name, {
+            values: base ? JSON.parse(JSON.stringify(base)) : undefined, _system: true,
+            _seed: Renderer.getSeed(), _seedVec: Renderer.getSeedVec().slice()
+        });
+        if (ok && Renderer.setTime) Renderer.setTime(time);
+        return ok;
     }
 
     function getList() {
@@ -276,6 +311,8 @@ var EffectRegistry = (function() {
         switchTo: switchTo,
         switchToAsync: switchToAsync,
         cancelPendingSwitch: cancelPendingSwitch,
+        getSwitchToken: getSwitchToken,
+        getUserSwitchToken: getUserSwitchToken,
         onSwitch: onSwitch,
         getDefinition: getDefinition,
         specFor: specFor,

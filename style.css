@@ -854,6 +854,16 @@ input[type="range"].psy-range:focus-visible {
 
 .shortcut-list span { margin-left: auto; color: var(--text); }
 
+.help-warning {
+    margin: 0;
+    padding: 0 20px 18px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-dim);
+}
+
+.help-warning strong { color: var(--text); font-weight: 600; }
+
 kbd {
     min-width: 24px;
     padding: 2px 7px;
@@ -1411,6 +1421,11 @@ kbd {
     font: 11px/1.35 Consolas, 'Courier New', monospace;
 }
 
+.shadertoy-channel-action {
+    display: block;
+    margin-top: 4px;
+}
+
 /* === Overlay Controls === */
 .overlay-group {
     margin-bottom: 10px;
@@ -1940,6 +1955,9 @@ kbd {
 }
 
 .overlay-toggle-row label { flex: 1 1 auto; min-width: 0; }
+
+/* Photosensitivity note under an overlay's enable row, aligned with its label. */
+.fx-hint.overlay-warning { margin: 0 0 2px; padding-left: 24px; }
 
 .react-auto-btn,
 .react-btn {

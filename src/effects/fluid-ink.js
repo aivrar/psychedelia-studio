@@ -9,6 +9,11 @@
  * display.
  * Beat Reactor: kicks fire bursts of ink from the emitters, bass strengthens
  * the push, hats flick small drops.
+ *
+ * The splat, curl, vorticity, divergence and pressure passes are adapted from
+ * WebGL-Fluid-Simulation by Pavel Dobryakov (MIT License, Copyright (c) 2017
+ * Pavel Dobryakov): https://github.com/PavelDoGreat/WebGL-Fluid-Simulation
+ * Licence text: lib/licenses/WebGL-Fluid-Simulation-LICENSE.txt
  */
 (function() {
     'use strict';

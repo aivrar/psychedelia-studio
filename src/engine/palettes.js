@@ -9,6 +9,17 @@
  * An effect opts in by marking its palette select with `palette: true`. The
  * registry then appends these palettes after the effect's own options and
  * the renderer binds the matching texture to u_psy_lut.
+ *
+ * Credits (licences as the sources state them: THIRD_PARTY_NOTICES.md):
+ * - Oklab (matrices in rgbToOklab / oklabToRgb): Bjorn Ottosson,
+ *   https://bottosson.github.io/posts/oklab/
+ * - Scientific group, approximate samples of published colour maps:
+ *   Viridis, Magma, Inferno, Plasma by Nathaniel J. Smith and Stefan van der
+ *   Walt (Viridis also Eric Firing), CC0, https://github.com/BIDS/colormap;
+ *   Turbo by Anton Mikhailov, Google, Apache-2.0,
+ *   https://gist.github.com/mikhailov-work/6a308c20e494d9e0ccc29036b28faa7a;
+ *   Twilight by Bastian Bechtold, https://github.com/bastibe/twilight;
+ *   Cubehelix by D. A. Green, https://arxiv.org/abs/1108.5083
  */
 var PsyPalettes = (function() {
     'use strict';

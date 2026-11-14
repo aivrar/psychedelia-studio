@@ -402,11 +402,13 @@
             dt = 0.006;
             viewScale = 3.8;
         } else {
-            defaults = [40.0, 0.50, 20.0, 0.65, 1.0, 0.833];
-            scales = [8.0, 0.22, 5.0, 0.25, 0.4, 0.25];
+            // TSUCS-1: [a, d, f, e, unused, c]. Its bounded region is narrow
+            // and the constants interact, so the user ranges stay small.
+            defaults = [40.0, 0.50, 20.0, 0.65, 0, 0.833];
+            scales = [2.0, 0.06, 1.2, 0.03, 1, 0.25];
             dt = 0.00075;
             viewScale = 18.0;
-            seedScale = 0.010;
+            seedScale = 10.0;
             warmup = 260;
         }
 
@@ -460,9 +462,12 @@
             p.y = sy * 6.28318530718;
             p.z = 0;
         } else if (mode === 20) {
-            p.x = 0.0001 + sx * s;
-            p.y = 0.0001 + sy * s;
-            p.z = 0.0001 + sz * s;
+            // Seeds near the origin all climb the z axis together and stay
+            // in phase, so every particle traced the same short arc. Seeding
+            // around the attractor's core (z about 20-40) spreads them out.
+            p.x = sx * s;
+            p.y = sy * s;
+            p.z = 30.0 + sz * s * 2.0;
         } else {
             p.x = sx * s;
             p.y = sy * s;
@@ -560,9 +565,19 @@
             ny = y + (x - y + z) * dt;
             nz = z + (-c[1] * y) * dt;
         } else {
-            nx = x + (c[0] * (y - x) + c[3] * x * z) * dt;
-            ny = y + (c[2] * x - x * z + c[5] * y) * dt;
-            nz = z + (c[1] * z + x * y - c[4] * x * x) * dt;
+            // TSUCS-1: x' = a(y - x) + d x z, y' = f y - x z, z' = c z + x y - e x^2.
+            // Euler steps much above 0.00075 let many orbits escape, so
+            // larger dt settings are split into sub-steps.
+            var sub = Math.max(1, Math.ceil(dt / 0.00075 - 0.001));
+            h = dt / sub;
+            for (var s = 0; s < sub; s++) {
+                nx = x + (c[0] * (y - x) + c[1] * x * z) * h;
+                ny = y + (c[2] * y - x * z) * h;
+                nz = z + (c[5] * z + x * y - c[3] * x * x) * h;
+                x = nx;
+                y = ny;
+                z = nz;
+            }
         }
 
         p.x = nx;
@@ -679,12 +694,21 @@
             state.particles[i * 3 + 2] = p.z;
         }
         // Sample the settled attractor to find its centre and extent.
+        // A trajectory that is leaving the attractor (Rabinovich-Fabrikant does
+        // this for some seeds) passes through huge but still finite values;
+        // its samples are dropped so they cannot stretch the frame until the
+        // attractor is a few pixels wide.
         var samples = [];
+        var bound = Math.max(settings.viewScale * 30, 60);
         for (var j = 0; j < Math.min(count, 48); j++) {
             p.x = state.particles[j * 3]; p.y = state.particles[j * 3 + 1]; p.z = state.particles[j * 3 + 2];
+            var first = samples.length;
             for (var k = 0; k < 160; k++) {
                 stepAttractor(mode, p, constants, dt);
-                if (!isFinitePoint(p)) break;
+                if (!isFinitePoint(p) || Math.abs(p.x) > bound || Math.abs(p.y) > bound || Math.abs(p.z) > bound) {
+                    samples.length = first;
+                    break;
+                }
                 if (mode === 16) p.z = p.z % (6.28318530718 / Math.max(Math.abs(constants[4]), 0.05));
                 if (k % 4 === 0) samples.push(p.x, p.y, p.z);
             }

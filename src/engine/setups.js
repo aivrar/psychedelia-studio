@@ -5,6 +5,13 @@ var Setups = (function() {
     var database = null, initialized = false, busy = false, lastSnapshot = '', timer = null;
     var assetKeys = new WeakMap(), assetPromises = new WeakMap(), entries = [];
     var selected = '', limits = { named: 50, name: 80 };
+    // Asset housekeeping: holds protects keys a capture handed out until its
+    // row is written; dropped marks keys swept from storage so a file that
+    // comes back is stored again; snapshotFiles maps a captured snapshot to
+    // its { key: File } so writeRow can re-store a file another tab swept.
+    // lastSaveError stops a repeating toast.
+    var holds = {}, dropped = {}, sweeping = false, lastSaveError = '', snapshotFiles = new WeakMap();
+    var loadRequest = 0; // newest named load; an older one stops before switchTo
     function el(id) { return document.getElementById(id); }
     function clone(value) { return JSON.parse(JSON.stringify(value)); }
     function blocked() { return busy || (typeof VideoExport !== 'undefined' && (VideoExport.isRecording() || VideoExport.isSaving())); }
@@ -24,13 +31,6 @@ var Setups = (function() {
             request.onblocked = function() { reject(new Error('Close other Psychedelia tabs to enable setup storage.')); };
         });
     }
-    function read(store, key) {
-        return new Promise(function(resolve, reject) {
-            var request = database.transaction(store).objectStore(store).get(key);
-            request.onsuccess = function() { resolve(request.result); };
-            request.onerror = function() { reject(request.error); };
-        });
-    }
     function write(store, value, key, remove) {
         return new Promise(function(resolve, reject) {
             var tx = database.transaction(store, 'readwrite'), target = tx.objectStore(store);
@@ -43,7 +43,7 @@ var Setups = (function() {
     }
     function asset(file) {
         if (!file) return null;
-        if (!assetKeys.has(file)) {
+        if (!assetKeys.has(file) || dropped[assetKeys.get(file)]) {
             var key = 'asset-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
             assetKeys.set(file, key);
             assetPromises.set(file, write('assets', file, key).catch(function(error) {
@@ -55,16 +55,102 @@ var Setups = (function() {
         }
         return assetKeys.get(file);
     }
+    function refs(snapshot) {
+        var out = [];
+        if (snapshot && snapshot.audio && typeof snapshot.audio.file === 'string' && snapshot.audio.file) out.push(snapshot.audio.file);
+        var images = snapshot && snapshot.images;
+        if (object(images)) Object.keys(images).forEach(function(k) { if (typeof images[k] === 'string' && images[k]) out.push(images[k]); });
+        return out;
+    }
+    // Commit a setups row in ONE transaction over both stores that first
+    // makes sure every asset it references exists, re-storing any that a
+    // sweep (in this or another tab) removed. IndexedDB serialises this with
+    // every sweep transaction, so a committed row never points at a missing
+    // file. If a missing file cannot be re-stored the row is not written.
+    function writeRow(row) {
+        var files = snapshotFiles.get(row.snapshot) || {}, keys = refs(row.snapshot), restored = [], failure = null;
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction(['setups', 'assets'], 'readwrite'), assets = tx.objectStore('assets');
+            var left = keys.length;
+            function putRow() { tx.objectStore('setups').put(row); }
+            keys.forEach(function(k) {
+                var request = assets.count(k);
+                request.onsuccess = function() {
+                    if (!request.result) {
+                        if (!files[k]) {
+                            failure = new Error('A file used by this setup is no longer stored. Load it again, then save.');
+                            tx.abort(); return;
+                        }
+                        assets.put(files[k], k); restored.push(k);
+                    }
+                    if (--left === 0) putRow();
+                };
+            });
+            if (!keys.length) putRow();
+            tx.oncomplete = function() { restored.forEach(function(k) { delete dropped[k]; }); resolve(true); };
+            tx.onerror = tx.onabort = function() { reject(failure || tx.error || new Error('Setup storage failed.')); };
+        });
+    }
+    // Read a row (by id) or a list of asset keys together with the assets in
+    // ONE transaction, so a sweep in any tab sees all of it or none of it.
+    function readStored(id, keys) {
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction(['setups', 'assets']), row = null, files = {};
+            function fetch(list) {
+                list.forEach(function(k) {
+                    var request = tx.objectStore('assets').get(k);
+                    request.onsuccess = function() { if (request.result) files[k] = request.result; };
+                });
+            }
+            if (id) {
+                var request = tx.objectStore('setups').get(id);
+                request.onsuccess = function() { row = request.result || null; if (row) fetch(refs(row.snapshot)); };
+            } else fetch(keys || []);
+            tx.oncomplete = function() { resolve({ row: row, files: files }); };
+            tx.onerror = tx.onabort = function() { reject(tx.error || new Error('Setup storage failed.')); };
+        });
+    }
+    function hold(keys, delta) {
+        keys.forEach(function(k) { holds[k] = (holds[k] || 0) + delta; if (holds[k] <= 0) delete holds[k]; });
+    }
+    // Delete stored files no saved row references. Decided and deleted in one
+    // transaction; keys held by an unfinished capture or used by the files
+    // loaded right now are kept. Never rejects: it is housekeeping only.
+    function sweep() {
+        if (!database || sweeping) return Promise.resolve(false);
+        sweeping = true;
+        return new Promise(function(resolve) {
+            var tx = database.transaction(['setups', 'assets'], 'readwrite');
+            var rows = tx.objectStore('setups').getAll(), keys = tx.objectStore('assets').getAllKeys(), removed = [];
+            keys.onsuccess = function() {
+                var keep = {};
+                (rows.result || []).forEach(function(row) { refs(row && row.snapshot).forEach(function(k) { keep[k] = true; }); });
+                Object.keys(holds).forEach(function(k) { keep[k] = true; });
+                try {
+                    var live = [AudioAnalysis.getFile()], images = Overlays.getImageFiles() || {};
+                    Object.keys(images).forEach(function(k) { live.push(images[k]); });
+                    live.forEach(function(f) { if (f && assetKeys.has(f)) keep[assetKeys.get(f)] = true; });
+                } catch (e) { return; } // Unsure what is live: keep everything this time.
+                (keys.result || []).forEach(function(k) {
+                    if (keep[k]) return;
+                    removed.push(k); tx.objectStore('assets').delete(k);
+                });
+            };
+            // Mark keys dropped only once the deletion has really committed.
+            tx.oncomplete = function() { removed.forEach(function(k) { dropped[k] = true; }); sweeping = false; resolve(true); };
+            tx.onerror = tx.onabort = function() { sweeping = false; console.warn('Setup asset cleanup failed:', tx.error); resolve(false); };
+        });
+    }
     async function capture() {
         var effect = EffectRegistry.getCurrent();
         if (!effect) throw new Error('Choose an effect before saving a setup.');
         var file = AudioAnalysis.getFile(), fileState = AudioAnalysis.getFileStatus();
         var imageFiles = Overlays.getImageFiles(), images = {};
-        var pending = [];
-        if (file) { asset(file); pending.push(assetPromises.get(file)); }
+        var pending = [], files = {};
+        if (file) { files[asset(file)] = file; pending.push(assetPromises.get(file)); }
         Object.keys(imageFiles).forEach(function(k) {
             if (!imageFiles[k]) return;
-            images[k] = asset(imageFiles[k]); pending.push(assetPromises.get(imageFiles[k]));
+            images[k] = asset(imageFiles[k]); files[images[k]] = imageFiles[k]; pending.push(assetPromises.get(imageFiles[k]));
         });
         var overlays = {};
         Overlays.getDefs().forEach(function(d) {
@@ -85,7 +171,10 @@ var Setups = (function() {
             fx: fx, overlays: overlays, images: images,
             shuffle: Looks.getConfiguration(),
             auto: { fx: Looks.getAuto('fx'), overlays: Looks.getAuto('overlays'), reactor: Looks.getAuto('reactor') } });
-        await Promise.all(pending); return snapshot;
+        // Held until the caller has written (or dropped) the row; see sweep().
+        hold(refs(snapshot), 1); snapshotFiles.set(snapshot, files);
+        try { await Promise.all(pending); } catch (error) { hold(refs(snapshot), -1); throw error; }
+        return snapshot;
     }
     function object(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
     function values(input, defs) {
@@ -127,15 +216,71 @@ var Setups = (function() {
         });
         return out;
     }
-    async function apply(snapshot) {
+    // Compile the setup's shader variant in the background (sharing a compile
+    // already in flight, e.g. the startup switch) instead of a blocking
+    // compile inside switchTo. null = let switchTo compile synchronously as
+    // before (automation mode, CPU mode, no shader).
+    function programFor(name, vals) {
+        var def = EffectRegistry.getDefinition(name);
+        if (window.__psySyncSwitch || !def || !def.shader || Renderer.getMode() === 'cpu' || !EffectRegistry.getSwitchToken ||
+                typeof ShaderManager === 'undefined' || !ShaderManager.createProgramAsync) return null;
+        var spec = EffectRegistry.specFor(def, vals);
+        if (!ShaderManager.getProgram(name, spec)) EffectRegistry.setCompileStatus(def);
+        return new Promise(function(resolve) { ShaderManager.createProgramAsync(def.shader, name, resolve, spec); });
+    }
+    // Taken before a load's first await: supersedes effect switches started
+    // before it (startup switch, a pick made just before Load) and records the
+    // user-intent token, checked once right before switchTo. Only a user's
+    // pick cancels a load; timeline clips and context restores do not.
+    // null = automation mode (__psySyncSwitch): no guards, as before.
+    function switchGuard() {
+        if (window.__psySyncSwitch || !EffectRegistry.getUserSwitchToken) return null;
+        EffectRegistry.cancelPendingSwitch();
+        return EffectRegistry.getUserSwitchToken();
+    }
+    // options: { guard: from switchGuard() when the caller awaited before
+    // apply; load: generation of a named load (a newer load cancels it);
+    // allow(): false = skip silently (startup restore after user activity) }
+    async function apply(snapshot, preloaded, options) {
+        options = options || {};
         if (blocked()) throw new Error('Wait for recording or the current setup operation to finish.');
+        var guard = options.guard !== undefined ? options.guard : switchGuard();
         var state = normalize(snapshot);
         busy = true;
         try {
-            var file = state.audio.file ? await read('assets', state.audio.file) : null;
+            // Assets come from the same transaction as their row (load/startup)
+            // or from one transaction now, never racing a sweep half-way.
+            var stored = preloaded || (await readStored(null, refs(state))).files;
+            var file = state.audio.file ? stored[state.audio.file] || null : null;
             var imageAssets = {};
-            for (var key of Object.keys(state.images || {})) imageAssets[key] = await read('assets', state.images[key]);
-            if (!EffectRegistry.switchTo(state.effect, { values: state.values, skipFallback: true })) throw new Error('Could not render the setup effect. Your current effect is still active.');
+            Object.keys(state.images || {}).forEach(function(key) { imageAssets[key] = stored[state.images[key]]; });
+            // The pill is ours while statusToken is unchanged; any later switch
+            // or cancel clears or replaces it and then owns it.
+            var statusToken = null;
+            var clearOwnStatus = function() {
+                if (statusToken !== null && statusToken === EffectRegistry.getSwitchToken()) EffectRegistry.setCompileStatus(null);
+            };
+            // Checked after the reads (so a pick made meanwhile is not
+            // overwritten by our pill or compile) and again after the compile,
+            // right before the first change.
+            var stopIfSuperseded = function() {
+                var abort = null;
+                // Applies in automation mode too: overlapping loads are never wanted.
+                if (options.load !== undefined && options.load !== loadRequest) abort = 'Setup load cancelled because another setup was loaded.';
+                else if (guard !== null && guard !== EffectRegistry.getUserSwitchToken()) abort = 'Setup load cancelled because another effect was chosen.';
+                else if (guard !== null && options.allow && !options.allow()) abort = 'Startup restore skipped: you started working first.';
+                if (!abort) return;
+                clearOwnStatus(); var cancelled = new Error(abort); cancelled.cancelled = true; throw cancelled;
+            };
+            stopIfSuperseded();
+            var switchOpts = { values: state.values, skipFallback: true, _system: true }, compile = programFor(state.effect, state.values);
+            if (compile) {
+                statusToken = EffectRegistry.getSwitchToken();
+                try { switchOpts.program = await compile; } catch (error) { clearOwnStatus(); throw error; }
+            }
+            stopIfSuperseded();
+            // switchTo stays the first change to the running app (and clears the pill).
+            if (!EffectRegistry.switchTo(state.effect, switchOpts)) throw new Error('Could not render the setup effect. Your current effect is still active.');
             Music.stop(); AudioAnalysis.stopCapture(); AudioAnalysis.pauseFile();
             Music.setSettings(state.music); AudioReactor.setConfiguration(state.reactor); AudioReactor.resetSignal();
             if (file) { assetKeys.set(file, state.audio.file); assetPromises.set(file, Promise.resolve()); await AudioAnalysis.loadFile(file); }
@@ -171,11 +316,17 @@ var Setups = (function() {
     }
     async function autosave() {
         if (!initialized || blocked()) return false;
+        var snapshot = null;
         try {
-            var snapshot = await capture(), signature = JSON.stringify(snapshot);
+            snapshot = await capture(); var signature = JSON.stringify(snapshot);
             if (signature === lastSnapshot || blocked()) return true;
-            await write('setups', { id: 'current', snapshot: snapshot }); lastSnapshot = signature; return true;
-        } catch (error) { report('Setup could not be saved: ' + error.message, true); return false; }
+            await writeRow({ id: 'current', snapshot: snapshot }); lastSnapshot = signature; lastSaveError = '';
+            sweep(); return true;
+        } catch (error) {
+            // Report a failure once; the 1.5 s retry must not toast every time.
+            var message = 'Setup could not be saved: ' + error.message;
+            report(message, message !== lastSaveError); lastSaveError = message; return false;
+        } finally { if (snapshot) hold(refs(snapshot), -1); }
     }
     async function reloadList() {
         entries = await new Promise(function(resolve, reject) {
@@ -194,10 +345,18 @@ var Setups = (function() {
         if (!existing && entries.length >= limits.named) throw new Error('Up to 50 setups can be saved. Delete one to make room.');
         var snapshot = await capture();
         var id = existing ? existing.id : 'named-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
-        await write('setups', { id: id, name: name, snapshot: snapshot }); selected = id; await reloadList(); report('Saved “' + name + '”.'); return id;
+        try { await writeRow({ id: id, name: name, snapshot: snapshot }); } finally { hold(refs(snapshot), -1); }
+        lastSaveError = ''; sweep();
+        selected = id; await reloadList(); report('Saved “' + name + '”.'); return id;
     }
-    async function load(id) { var row = await read('setups', id); if (!row) throw new Error('That setup is no longer saved.'); await apply(row.snapshot); selected = id; await autosave(); return true; }
-    async function remove(id) { if (!id || id === 'current' || blocked()) return false; await write('setups', null, id, true); selected = ''; await reloadList(); report('Saved setup deleted.'); return true; }
+    async function load(id) {
+        if (blocked()) throw new Error('Wait for recording or the current setup operation to finish.');
+        var guard = switchGuard(); // before the row read, so a pick made during it wins
+        var generation = ++loadRequest; // a later load supersedes this one
+        var stored = await readStored(id); if (!stored.row) throw new Error('That setup is no longer saved.');
+        await apply(stored.row.snapshot, stored.files, { guard: guard, load: generation }); selected = id; await autosave(); return true;
+    }
+    async function remove(id) { if (!id || id === 'current' || blocked()) return false; await write('setups', null, id, true); sweep(); selected = ''; await reloadList(); report('Saved setup deleted.'); return true; }
     function mount() {
         var group = document.createElement('div'); group.className = 'collapsible setup-controls'; group.dataset.section = 'setups';
         group.innerHTML = '<label class="panel-title section-head">Saved Setups</label><div class="reactor-link-help">Music, mixer, effects, palettes, FX, overlays, files and beat links. Your latest setup is restored automatically.</div>' +
@@ -217,12 +376,23 @@ var Setups = (function() {
         function userChange(e) { if (e.target && e.target.closest && e.target.closest('input, select, button, textarea')) changed = true; }
         document.addEventListener('input', userChange); document.addEventListener('change', userChange); document.addEventListener('click', userChange);
         var initialMusic = JSON.stringify(Music.getSettings()), initialSource = AudioAnalysis.getSource();
+        var userToken = !window.__psySyncSwitch && EffectRegistry.getUserSwitchToken ? EffectRegistry.getUserSwitchToken() : null;
         try {
-            await open(); await reloadList(); var saved = await read('setups', 'current');
-            // A slow database must not overwrite a Play click or edits made
-            // while the app was opening. Explicit named loads still restore.
-            if (saved && !changed && !Music.isPlaying() && !Music.isStarting() &&
-                initialMusic === JSON.stringify(Music.getSettings()) && initialSource === AudioAnalysis.getSource()) await apply(saved.snapshot);
+            await open(); await reloadList(); var stored = await readStored('current'), saved = stored.row;
+            // A slow database must not overwrite a Play click, an effect pick
+            // or edits made while the app was opening; checked again inside
+            // apply after its awaits. Explicit named loads still restore.
+            var untouched = function() {
+                return !changed && !Music.isPlaying() && !Music.isStarting() && initialMusic === JSON.stringify(Music.getSettings()) &&
+                    initialSource === AudioAnalysis.getSource() && (userToken === null || userToken === EffectRegistry.getUserSwitchToken());
+            };
+            if (saved && untouched()) {
+                // A bad stored setup must not disable setups for good: report
+                // it, then carry on so autosave replaces it with a fresh one.
+                // If the user starts working meanwhile, their state wins silently.
+                try { await apply(saved.snapshot, stored.files, { allow: untouched }); }
+                catch (applyError) { if (!applyError.cancelled) report('Your last setup could not be restored: ' + applyError.message, true); }
+            }
             initialized = true;
             ['setupSelect', 'setupName', 'setupSave', 'setupLoad', 'setupDelete'].forEach(function(id) { el(id).disabled = false; });
             if (typeof UIShell !== 'undefined') UIShell.initCollapsibles();
@@ -234,6 +404,8 @@ var Setups = (function() {
         } catch (e) { report('Saved setups unavailable: ' + e.message, true); return false; }
         finally { document.removeEventListener('input', userChange); document.removeEventListener('change', userChange); document.removeEventListener('click', userChange); }
     }
-    return { init: init, capture: capture, apply: apply, save: save, load: load, remove: remove, autosave: autosave,
+    // Public capture: no row will be written from it here, so release its hold.
+    function capturePublic() { return capture().then(function(snapshot) { hold(refs(snapshot), -1); return snapshot; }); }
+    return { init: init, capture: capturePublic, apply: apply, save: save, load: load, remove: remove, autosave: autosave,
         getList: function() { return entries.map(function(e) { return { id: e.id, name: e.name }; }); }, isBusy: function() { return busy; } };
 })();

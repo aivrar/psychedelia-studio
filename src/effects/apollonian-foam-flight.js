@@ -187,8 +187,15 @@ vec3 paletteFoam(float t, float paletteMode) {
 
 // Established distance estimators (the previous ones were improvised,
 // clamped and boosted, so rays tunnelled through and rendered noise):
-// - Knighty's pseudo-Kleinian (box fold + sphere inversion, shell DE)
-// - iq's Apollonian sphere-packing lattice
+// - Knighty's pseudo-Kleinian (box fold + sphere inversion, shell DE). The fold
+//   loop follows "Pseudo Kleinian" by Knighty (after Theli-at) in Fragmentarium:
+//   https://github.com/Syntopia/Fragmentarium/blob/master/Fragmentarium-Source/Examples/Knighty%20Collection/PseudoKleinian.frag
+// - iq's Apollonian sphere-packing lattice: the Shadertoy shader "Apollonian"
+//   (2013) by Inigo Quilez (fold with fract, invert, accumulate the scale).
+//   That shader is under CC BY-NC-SA 3.0 (the Shadertoy default), so the
+//   Apollonian branch below stays under CC BY-NC-SA 3.0, not this project's
+//   MIT licence: https://creativecommons.org/licenses/by-nc-sa/3.0/
+// Credits and the licences the sources state: THIRD_PARTY_NOTICES.md
 // All animation acts on the parameters uniformly in space, which keeps the
 // estimators valid.
 FoamHit foamDE(vec3 p) {
@@ -234,6 +241,7 @@ FoamHit foamDE(vec3 p) {
         dist = max(rxy - thickness, abs(rxy * z.z) / max(length(z), 0.0001)) / scaleAccum;
     } else {
         // Apollonian packing; Sphere Chain stretches the lattice along z.
+        // Adapted from "Apollonian" by Inigo Quilez (CC BY-NC-SA 3.0).
         float sApo = clamp(0.9 + (u_inversion_radius - 0.25) / 1.55 * 0.6, 0.9, 1.6) + pulse * 0.06;
         float stretch = mode > 2.5 ? clamp(u_cell_scale / 1.6, 1.0, 2.6) : 1.0;
         z.z /= stretch;

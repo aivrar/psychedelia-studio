@@ -251,6 +251,13 @@
         return state.lineProgram && state.pointProgram && state.compositeProgram;
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Buffer, Program, ...
+    function drop(gl, kind, obj) {
+        if (obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function init(gl) {
         cleanup(gl);
         if (!gl) return;
@@ -259,6 +266,11 @@
         state.pointBuffer = gl.createBuffer();
         state.lineBuffer = gl.createBuffer();
         state.quadBuffer = gl.createBuffer();
+        // isBuffer() is false until a buffer is first bound; bind each once so
+        // cleanup() can tell a live buffer from one of a lost context even if
+        // no points/lines were ever drawn.
+        gl.bindBuffer(gl.ARRAY_BUFFER, state.pointBuffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, state.lineBuffer);
         gl.bindBuffer(gl.ARRAY_BUFFER, state.quadBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
         state.points = new Float32Array(MAX_POINTS * 3);
@@ -272,14 +284,14 @@
     function cleanup(gl) {
         gl = gl || state.gl;
         if (gl) {
-            if (state.pointBuffer) gl.deleteBuffer(state.pointBuffer);
-            if (state.lineBuffer) gl.deleteBuffer(state.lineBuffer);
-            if (state.quadBuffer) gl.deleteBuffer(state.quadBuffer);
-            if (state.lineProgram) gl.deleteProgram(state.lineProgram);
-            if (state.pointProgram) gl.deleteProgram(state.pointProgram);
-            if (state.compositeProgram) gl.deleteProgram(state.compositeProgram);
-            if (state.fbo) gl.deleteFramebuffer(state.fbo);
-            if (state.fboTex) gl.deleteTexture(state.fboTex);
+            drop(gl, 'Buffer', state.pointBuffer);
+            drop(gl, 'Buffer', state.lineBuffer);
+            drop(gl, 'Buffer', state.quadBuffer);
+            drop(gl, 'Program', state.lineProgram);
+            drop(gl, 'Program', state.pointProgram);
+            drop(gl, 'Program', state.compositeProgram);
+            drop(gl, 'Framebuffer', state.fbo);
+            drop(gl, 'Texture', state.fboTex);
         }
         state.gl = null;
         state.lineProgram = null;
@@ -664,8 +676,8 @@
 
     function ensureFbo(gl, w, h) {
         if (state.fbo && state.fboW === w && state.fboH === h) return true;
-        if (state.fbo) gl.deleteFramebuffer(state.fbo);
-        if (state.fboTex) gl.deleteTexture(state.fboTex);
+        drop(gl, 'Framebuffer', state.fbo);
+        drop(gl, 'Texture', state.fboTex);
         state.fboTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, state.fboTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);

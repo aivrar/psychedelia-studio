@@ -49,7 +49,8 @@ var StrangeAttractorFeed = (function() {
         var countLoc = getLocation(program, 'u_attr_count');
         if (countLoc === null) return;
         var mode = Math.max(0, Math.min(3, Math.round(Number(values.attractor_mode) || 0)));
-        var chaos = Number(values.chaos) || 0.78;
+        var chaos = Number(values.chaos);
+        if (values.chaos === null || values.chaos === undefined || values.chaos === '' || !isFinite(chaos)) chaos = 0.78;
         var key = mode + '|' + chaos.toFixed(3);
         if (cache.key !== key) cache = { key: key, data: compute(mode, chaos) };
         var loc = getLocation(program, 'u_attr_points[0]');

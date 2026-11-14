@@ -99,7 +99,7 @@ void main() {
         vec3 p = ro + rd * tt;
         vec3 n = calcNormal(p);
         float diff = max(dot(n, normalize(vec3(0.3, 0.6, -0.5))), 0.0) * 0.6 + 0.4;
-        float facing = max(dot(n, -rd), 0.0);
+        float facing = clamp(dot(n, -rd), 0.0, 1.0);
         float film = facing * 1.8 + p.z * 0.05 + dot(n, vec3(0.3, 0.5, 0.2));
         vec3 base = pal(film * u_iridescence + (1.0 - u_iridescence) * (p.z * 0.03));
         col = base * diff;

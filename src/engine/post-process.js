@@ -160,15 +160,22 @@ var PostProcess = (function() {
         return map[key];
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Program, Buffer, ...
+    function drop(kind, obj) {
+        if (obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function destroyPrograms() {
         if (!gl) return;
         for (var i = 0; i < effectOrder.length; i++) {
             var fx = effects[effectOrder[i]];
-            if (fx && fx.program) gl.deleteProgram(fx.program);
+            if (fx) drop('Program', fx.program);
         }
-        if (blitProgram) gl.deleteProgram(blitProgram);
-        if (audioProgram) gl.deleteProgram(audioProgram);
-        if (quadVBO) gl.deleteBuffer(quadVBO);
+        drop('Program', blitProgram);
+        drop('Program', audioProgram);
+        drop('Buffer', quadVBO);
         blitProgram = null;
         audioProgram = null;
         quadVBO = null;
@@ -218,8 +225,8 @@ var PostProcess = (function() {
 
     function destroyHistory(fx) {
         if (!fx.hist || !gl) { fx.hist = null; return; }
-        fx.hist.fb.forEach(function(x) { if (x) gl.deleteFramebuffer(x); });
-        fx.hist.tex.forEach(function(x) { if (x) gl.deleteTexture(x); });
+        fx.hist.fb.forEach(function(x) { drop('Framebuffer', x); });
+        fx.hist.tex.forEach(function(x) { drop('Texture', x); });
         fx.hist = null;
     }
 
@@ -229,8 +236,8 @@ var PostProcess = (function() {
         var texs = [captureTex, pingTex, pongTex];
         for (var k in effects) destroyHistory(effects[k]);
         for (var i = 0; i < fbs.length; i++) {
-            if (fbs[i]) gl.deleteFramebuffer(fbs[i]);
-            if (texs[i]) gl.deleteTexture(texs[i]);
+            drop('Framebuffer', fbs[i]);
+            drop('Texture', texs[i]);
         }
         captureFB = captureTex = pingFB = pingTex = pongFB = pongTex = null;
     }

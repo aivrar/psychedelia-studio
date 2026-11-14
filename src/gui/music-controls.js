@@ -148,7 +148,7 @@ var MusicControls = (function() {
                 '</div>' +
             '</div>' +
             '<div class="audio-source-controls reactor-links collapsible" data-section="links" data-collapsed-default="1">' +
-                '<label class="panel-title section-head">Parameter Links <button type="button" class="panel-action" id="reactLinkSuggest" title="Restore gentle beat links for this effect">Suggested</button></label>' +
+                '<div class="panel-title section-head">Parameter Links <button type="button" class="panel-action" id="reactLinkSuggest" title="Restore gentle beat links for this effect">Suggested</button></div>' +
                 '<div class="reactor-link-help" id="reactLinkHelp">Gentle beat links are chosen for each effect. Your changes are remembered. Use Time Surge for smooth changes in speed.</div>' +
                 linkRows +
             '</div>';
@@ -608,11 +608,13 @@ var MusicControls = (function() {
         seek.max = duration ? String(duration) : '0';
         seek.value = String(Math.min(time, duration || time));
         seek.disabled = !hasFile;
+        if (window.UIShell && UIShell.paintRange) UIShell.paintRange(seek);
         el('audioFileTime').textContent = formatTime(time) + (duration ? ' / ' + formatTime(duration) : '');
 
         var gain = el('audioFileGain');
         gain.value = String(fileStatus.gain);
         gain.disabled = !hasFile;
+        if (window.UIShell && UIShell.paintRange) UIShell.paintRange(gain);
         el('audioFileGainVal').textContent = (isFinite(Number(fileStatus.gain)) ? Number(fileStatus.gain) : 1).toFixed(2);
         var loop = el('audioFileLoop');
         loop.checked = !!fileStatus.loop;

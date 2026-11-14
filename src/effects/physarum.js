@@ -192,13 +192,20 @@
         return d;
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Texture, Framebuffer, ...
+    function drop(gl, kind, obj) {
+        if (obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function destroy(gl) {
         if (!S || !gl) { S = null; return; }
-        ['agents0', 'agents1', 'trail0', 'trail1'].forEach(function(k) { if (S[k]) gl.deleteTexture(S[k]); });
-        ['fbA0', 'fbA1', 'fbT0', 'fbT1'].forEach(function(k) { if (S[k]) gl.deleteFramebuffer(S[k]); });
-        ['pAgent', 'pDeposit', 'pDiffuse', 'pDisplay'].forEach(function(k) { if (S[k]) gl.deleteProgram(S[k].p); });
-        if (S.quad) gl.deleteBuffer(S.quad);
-        if (S.dummy) gl.deleteBuffer(S.dummy);
+        ['agents0', 'agents1', 'trail0', 'trail1'].forEach(function(k) { drop(gl, 'Texture', S[k]); });
+        ['fbA0', 'fbA1', 'fbT0', 'fbT1'].forEach(function(k) { drop(gl, 'Framebuffer', S[k]); });
+        ['pAgent', 'pDeposit', 'pDiffuse', 'pDisplay'].forEach(function(k) { if (S[k]) drop(gl, 'Program', S[k].p); });
+        drop(gl, 'Buffer', S.quad);
+        drop(gl, 'Buffer', S.dummy);
         S = null;
     }
 

@@ -326,7 +326,7 @@ var PostFxLibrary = (function() {
             '        float d = length(g + o - f);\n' +
             '        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;\n' +
             '    }\n' +
-            '    return smoothstep(0.14, 0.0, d2 - d1);\n' +
+            '    return 1.0 - smoothstep(0.0, 0.14, d2 - d1);\n' +
             '}\n' +
             'void main() {\n' +
             '    float aspect = u_resolution.x / max(u_resolution.y, 1.0);\n' +
@@ -1010,7 +1010,7 @@ var PostFxLibrary = (function() {
             '    float edge = d2 - d1;\n' +
             '    float w = 0.02 + u_lead * 0.16;\n' +
             '    float leadMask = smoothstep(w, w + 0.04, edge);\n' +
-            '    vec3 leadCol = vec3(0.05, 0.05, 0.06) + vec3(0.12) * smoothstep(w * 0.2, 0.0, abs(edge - w * 0.5));\n' +
+            '    vec3 leadCol = vec3(0.05, 0.05, 0.06) + vec3(0.12) * (1.0 - smoothstep(0.0, w * 0.2, abs(edge - w * 0.5)));\n' +
             '    vec3 outc = mix(leadCol, glass, leadMask);\n' +
             '    gl_FragColor = vec4(mix(orig, clamp(outc, 0.0, 1.0), u_mix), 1.0);\n' +
             '}'
@@ -1272,7 +1272,7 @@ var PostFxLibrary = (function() {
             '    float frameT = floor(t * 24.0);\n' +
             '    uv.x += (sin(uv.y * 30.0 + t * 2.0) * 0.0015 + sin(uv.y * 7.0 - t * 1.3) * 0.002) * u_wobble;\n' +
             '    uv.x += (vh(floor(uv.y * 240.0) + frameT) - 0.5) * 0.002 * u_jitter;\n' +
-            '    float tr = smoothstep(0.06, 0.0, abs(uv.y - fract(t * 0.07))) * u_tracking;\n' +
+            '    float tr = (1.0 - smoothstep(0.0, 0.06, abs(uv.y - fract(t * 0.07)))) * u_tracking;\n' +
             '    uv.x += tr * (vh(floor(uv.y * 120.0) + frameT) - 0.5) * 0.06;\n' +
             '    vec3 c = texture2D(u_tex, uv).rgb;\n' +
             '    vec3 smear = vec3(0.0);\n' +

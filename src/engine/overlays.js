@@ -472,7 +472,7 @@ var Overlays = (function() {
         rings: [], ringCount: -1, bolts: [], boltCount: -1, fw: [], fwRockets: [], fwCount: -1, fwHue: 0, px: [], spectrum: null, sprites: {}, failed: {},
         lr: { phase: 0, count: -1, flash: 0, sweep: 0, kickSweep: 0 }, bk: [], bkCount: -1, mx: null, images: {}, imgAngle: 0, spriteCount: 0,
         cn: { start: 0, last: -1, burns: [], burnCount: -1, nextBurn: 0, dip: 0, dipCount: -1 },
-        hx: { pulses: [], count: -1, lastFree: 0 }, ly: { startBeat: 0, startTime: 0, last: -1, idx: -1, lineStart: 0 }
+        hx: { pulses: [], count: -1, lastFree: 0, last: -1 }, ly: { startBeat: 0, startTime: 0, last: -1, lastBeat: 0, idx: -1, lineStart: 0 }
     };
 
     function init() {
@@ -888,7 +888,7 @@ var Overlays = (function() {
             spawnBolts(now);
         }
         var life = Math.max(0.02, P.bolt_life);
-        st.bolts = st.bolts.filter(function(b) { return now - b.born < life; });
+        st.bolts = st.bolts.filter(function(b) { return now >= b.born && now - b.born < life; });
         if (!st.bolts.length) return;
 
         ctx.globalCompositeOperation = 'lighter';
@@ -1485,6 +1485,14 @@ var Overlays = (function() {
         var img = new Image();
         img.__url = URL.createObjectURL(file);
         img.__file = file;
+        img.onerror = function() {
+            // Undecodable file: drop it rather than keep a dead entry around.
+            URL.revokeObjectURL(img.__url);
+            if (st.images[name] === img) {
+                delete st.images[name];
+                params[name] = '';
+            }
+        };
         img.src = img.__url;
         st.images[name] = img;
         params[name] = file.name || 'image';
@@ -1518,7 +1526,8 @@ var Overlays = (function() {
 
     function renderCinematic(w, h, time) {
         var C = st.cn;
-        if (time - C.last > 0.5) { C.start = time; C.burns = []; C.dip = 0; }
+        // Re-seed after a jump either way (resetTime/loop wrap sends time back to 0).
+        if (time - C.last > 0.5 || time < C.last) { C.start = time; C.burns = []; C.dip = 0; C.nextBurn = 0; }
         C.last = time;
         var dt = st.dt;
         // Film burn: on the chosen hit, or now and then when free running.
@@ -1569,7 +1578,7 @@ var Overlays = (function() {
         var aspect = [0, 1.85, 2, 2.39, 2.76][Math.round(P.cn_aspect)] || 0;
         if (aspect > w / h) {
             var bar = (h - w / aspect) / 2;
-            var k = P.cn_bar_slide > 0 ? Math.min(1, (time - C.start) / P.cn_bar_slide) : 1;
+            var k = P.cn_bar_slide > 0 ? clamp01((time - C.start) / P.cn_bar_slide) : 1;
             k = k * k * (3 - 2 * k);
             ctx.globalAlpha = clamp01(P.cn_bar_opacity);
             ctx.fillStyle = '#000';
@@ -1581,6 +1590,9 @@ var Overlays = (function() {
     // ------------------------------------------------------------ Tron Hex Grid
     function renderHexGrid(w, h, time) {
         var H = st.hx;
+        // Time went backwards (reset/loop wrap): drop pulses from the "future".
+        if (time < H.last) { H.lastFree = time; H.pulses = []; }
+        H.last = time;
         var tr = trigger(syncType(P.hx_sync));
         if (tr) {
             if (tr.count !== H.count) { if (H.count >= 0) H.pulses.push(time); H.count = tr.count; }
@@ -1596,7 +1608,7 @@ var Overlays = (function() {
         var F = h * 0.95, horizon = h * 0.38, camY = 2.4, maxZ = 38;
         var speed = P.hx_pulse_speed * (floor ? 9 : Math.min(w, h) * 0.7);
         var maxR = floor ? maxZ : Math.hypot(w, h) * 0.6;
-        H.pulses = H.pulses.filter(function(t0) { return (time - t0) * speed < maxR * 1.3; });
+        H.pulses = H.pulses.filter(function(t0) { return t0 <= time && (time - t0) * speed < maxR * 1.3; });
         var scrollOff = ((time * P.hx_scroll * (floor ? 3 : V * 2)) % (V * 2) + V * 2) % (V * 2);
 
         function screenOf(x, z) { return [cx + x / z * F, horizon + camY / z * F]; }
@@ -1700,11 +1712,15 @@ var Overlays = (function() {
         if (!lines.length) return;
         var beats = beatClock(time);
         var adv = Math.round(P.ly_advance);
-        if (time - L.last > 0.5) { L.startBeat = beats; L.startTime = time; }
+        // Re-seed after a jump either way: resetTime/loop wrap sends time back to
+        // 0 and a beat-clock reset sends the beat count back.
+        if (time - L.last > 0.5 || time < L.last || beats < L.lastBeat - 0.25) { L.startBeat = beats; L.startTime = time; L.idx = -1; }
         L.last = time;
+        L.lastBeat = beats;
         var pos;
         if (adv === 5) pos = (time - L.startTime) / Math.max(0.2, P.ly_seconds);
         else pos = (beats - L.startBeat) / [1, 2, 4, 8, 16][adv];
+        if (!isFinite(pos)) pos = 0;
         var idx = Math.floor(pos), p = pos - idx;
         var endMode = Math.round(P.ly_end);
         if (idx >= lines.length) {
@@ -1712,6 +1728,7 @@ var Overlays = (function() {
             if (endMode === 1) { idx = lines.length - 1; p = 0.5; }
             else idx = idx % lines.length;
         }
+        if (idx < 0) idx = ((idx % lines.length) + lines.length) % lines.length;
         var text = lines[idx];
         var cs = Math.round(P.ly_case);
         if (cs === 1) text = text.toUpperCase(); else if (cs === 2) text = text.toLowerCase();
@@ -2056,7 +2073,7 @@ var Overlays = (function() {
                 if (st.ringCount >= 0) st.rings.push({ born: now, id: tr.count });
                 st.ringCount = tr.count;
             }
-            st.rings = st.rings.filter(function(r) { return now - r.born < life; });
+            st.rings = st.rings.filter(function(r) { return now >= r.born && now - r.born < life; });
             st.rings.forEach(function(r) { births.push({ age: now - r.born, id: r.id }); });
         } else {
             var interval = Math.max(0.05, P.ring_interval);
@@ -2437,7 +2454,7 @@ var Overlays = (function() {
         ctx.font = 'bold ' + size.toFixed(1) + 'px ' + (FONTS[Math.round(P.text_font)] || FONTS[0]);
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
-        var chars = txt.split('');
+        var chars = Array.from(txt);
         var spacing = P.text_spacing * size;
         var widths = chars.map(function(ch) { return ctx.measureText(ch).width; });
         var total = widths.reduce(function(s, v) { return s + v; }, 0) + spacing * Math.max(0, chars.length - 1);
@@ -2486,7 +2503,7 @@ var Overlays = (function() {
     // ------------------------------------------------------------ Flash
     function renderFlash(w, h, time) {
         var elapsed = time - params.flash_start;
-        if (elapsed > 0.3) { params.flash_active = false; return; }
+        if (elapsed > 0.3 || elapsed < 0) { params.flash_active = false; return; }
         var alpha = 1.0 - elapsed / 0.3;
         ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
         ctx.fillRect(0, 0, w, h);
@@ -2589,7 +2606,41 @@ var Overlays = (function() {
 
     function setEnabled(name, val) { enabled[name] = val; }
     function isEnabled(name) { return enabled[name]; }
-    function setParam(name, val) { params[name] = val; }
+    // Settings can arrive from imported setups/timelines, so only known names
+    // are stored, numbers are kept finite and inside [min, max], selects stay
+    // on an option and text is length-capped. Invalid values are ignored.
+    var TEXT_LIMITS = { text: 2000, textarea: 20000, image: 1024 };
+    function setParam(name, val) {
+        var def = DEF_BY_NAME[name];
+        if (!def) {
+            if (name === 'strobe_rate' && isFinite(Number(val)) && val !== null && val !== '') params.strobe_rate = Number(val);
+            return;
+        }
+        var type = def.type;
+        if (type === 'text' || type === 'textarea' || type === 'image') {
+            params[name] = String(val === null || val === undefined ? '' : val).slice(0, TEXT_LIMITS[type]);
+            return;
+        }
+        if (type === 'color') {
+            var c = typeof val === 'string' && /^#[0-9a-f]{6}$/i.test(val) ? hexToVec3(val) : val;
+            if (!c || typeof c.length !== 'number' || c.length < 3) return;
+            var rgb = [Number(c[0]), Number(c[1]), Number(c[2])];
+            if (!isFinite(rgb[0]) || !isFinite(rgb[1]) || !isFinite(rgb[2])) return;
+            params[name] = [clamp(rgb[0], 0, 1), clamp(rgb[1], 0, 1), clamp(rgb[2], 0, 1)];
+            return;
+        }
+        if (val === null || val === undefined || val === '' || typeof val === 'object') return;
+        var n = Number(val);
+        if (!isFinite(n)) return;
+        if (type === 'select') n = Math.round(n);
+        // Strobe numbers are deliberately not held to the slider range (owner's
+        // decision: no limit on strobe settings); the strobe renderer copes
+        // with any finite value itself.
+        var free = type !== 'select' && name.indexOf('strobe_') === 0;
+        if (!free && typeof def.min === 'number') n = Math.max(def.min, n);
+        if (!free && typeof def.max === 'number') n = Math.min(def.max, n);
+        params[name] = n;
+    }
     function getParam(name) { return params[name]; }
     function getParams() { return params; }
     function getEnabled() { return enabled; }

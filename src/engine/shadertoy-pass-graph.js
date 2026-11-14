@@ -18,6 +18,13 @@ var ShadertoyPassGraph = (function() {
         return JSON.parse(JSON.stringify(obj));
     }
 
+    // Delete a live GL object. After a context restore, objects of the lost
+    // context fail is*() and are only dropped: deleting them would leave
+    // INVALID_OPERATION in the error queue. kind: Program, Texture, Framebuffer.
+    function drop(gl, kind, obj) {
+        if (gl && obj && gl['is' + kind](obj)) gl['delete' + kind](obj);
+    }
+
     function makeProjectId() {
         return 'shader-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 100000).toString(36);
     }
@@ -82,7 +89,8 @@ var ShadertoyPassGraph = (function() {
         normalized.common.source = project.common && typeof project.common.source === 'string' ? project.common.source : '';
 
         var incoming = {};
-        (project.passes || []).forEach(function(pass) {
+        (Array.isArray(project.passes) ? project.passes : []).forEach(function(pass) {
+            if (!pass || typeof pass !== 'object') return;
             incoming[pass.id || pass.name] = pass;
         });
 
@@ -94,7 +102,7 @@ var ShadertoyPassGraph = (function() {
                 type: base.type,
                 label: base.label,
                 enabled: base.id === 'image' ? true : !!pass.enabled,
-                resolutionScale: Number(pass.resolutionScale) > 0 ? Number(pass.resolutionScale) : 1,
+                resolutionScale: Number(pass.resolutionScale) > 0 ? Math.max(0.125, Math.min(1, Number(pass.resolutionScale))) : 1,
                 source: typeof pass.source === 'string' ? pass.source : (typeof pass.code === 'string' ? pass.code : ''),
                 channels: normalizeChannels(pass.channels)
             };
@@ -102,20 +110,33 @@ var ShadertoyPassGraph = (function() {
         return normalized;
     }
 
+    // Imported projects are untrusted: keep only string/object fields of the
+    // expected shape. URL/dataUrl values are kept as strings here; whether
+    // they may be fetched is decided by ShadertoyChannels at load time.
+    function str(value) {
+        return typeof value === 'string' && value ? value : null;
+    }
+
+    function cleanChannel(channel, slot) {
+        var sampler = channel.sampler && typeof channel.sampler === 'object' && !Array.isArray(channel.sampler) ? channel.sampler : {};
+        return {
+            slot: slot,
+            kind: str(channel.kind) || str(channel.type) || 'none',
+            sourceId: str(channel.sourceId) || str(channel.id) || null,
+            url: str(channel.url),
+            dataUrl: str(channel.dataUrl),
+            sampler: sampler,
+            message: str(channel.message) || ''
+        };
+    }
+
     function normalizeChannels(channels) {
         var out = defaultChannels();
-        (channels || []).forEach(function(channel, i) {
-            var slot = channel.slot !== undefined ? channel.slot : i;
-            if (slot < 0 || slot > 3) return;
-            out[slot] = {
-                slot: slot,
-                kind: channel.kind || channel.type || 'none',
-                sourceId: channel.sourceId || channel.id || null,
-                url: channel.url || null,
-                dataUrl: channel.dataUrl || null,
-                sampler: channel.sampler || {},
-                message: channel.message || ''
-            };
+        (Array.isArray(channels) ? channels : []).forEach(function(channel, i) {
+            if (!channel || typeof channel !== 'object') return;
+            var slot = channel.slot !== undefined ? Number(channel.slot) : i;
+            if (!(slot >= 0 && slot <= 3) || Math.floor(slot) !== slot) return;
+            out[slot] = cleanChannel(channel, slot);
         });
         return out;
     }
@@ -216,7 +237,7 @@ var ShadertoyPassGraph = (function() {
         to.resolutionScale = from.resolutionScale || 1;
         to.source = from.source || '';
         to.channels = clone(from.channels || defaultChannels());
-        if (this.programs[toId]) this.gl.deleteProgram(this.programs[toId]);
+        drop(this.gl, 'Program', this.programs[toId]);
         delete this.programs[toId];
         delete this.compileResults[toId];
         this.status = this.rebuildStatus();
@@ -231,7 +252,7 @@ var ShadertoyPassGraph = (function() {
         pass.resolutionScale = 1;
         pass.source = '';
         pass.channels = defaultChannels();
-        if (this.programs[id]) this.gl.deleteProgram(this.programs[id]);
+        drop(this.gl, 'Program', this.programs[id]);
         delete this.programs[id];
         delete this.compileResults[id];
         this.status = this.rebuildStatus();
@@ -250,21 +271,22 @@ var ShadertoyPassGraph = (function() {
     PassGraph.prototype.setChannel = function(passId, slot, channel) {
         var pass = this.getPass(passId);
         if (!pass || slot < 0 || slot > 3) return;
+        channel = channel || {};
         pass.channels[slot] = {
             slot: slot,
-            kind: channel.kind || 'none',
-            sourceId: channel.sourceId || null,
-            url: channel.url || null,
-            dataUrl: channel.dataUrl || null,
-            sampler: channel.sampler || {},
-            message: channel.message || ''
+            kind: str(channel.kind) || 'none',
+            sourceId: str(channel.sourceId),
+            url: str(channel.url),
+            dataUrl: str(channel.dataUrl),
+            sampler: channel.sampler && typeof channel.sampler === 'object' ? channel.sampler : {},
+            message: str(channel.message) || ''
         };
     };
 
     PassGraph.prototype.destroyPrograms = function() {
         var gl = this.gl;
         for (var id in this.programs) {
-            if (this.programs[id]) gl.deleteProgram(this.programs[id]);
+            drop(gl, 'Program', this.programs[id]);
         }
         this.programs = {};
     };
@@ -308,7 +330,7 @@ var ShadertoyPassGraph = (function() {
             return this.status;
         }
         if (!pass.enabled) {
-            if (this.programs[id]) this.gl.deleteProgram(this.programs[id]);
+            drop(this.gl, 'Program', this.programs[id]);
             delete this.programs[id];
             delete this.compileResults[id];
             this.status = this.rebuildStatus();
@@ -316,7 +338,7 @@ var ShadertoyPassGraph = (function() {
         }
 
         var oldProgram = this.programs[id];
-        if (oldProgram) this.gl.deleteProgram(oldProgram);
+        drop(this.gl, 'Program', oldProgram);
         delete this.programs[id];
 
         var result = ShadertoyCompiler.createProgram(this.gl, {
@@ -475,8 +497,8 @@ var ShadertoyPassGraph = (function() {
         for (var id in this.buffers) {
             var record = this.buffers[id];
             for (var i = 0; i < record.targets.length; i++) {
-                gl.deleteFramebuffer(record.targets[i].fb);
-                gl.deleteTexture(record.targets[i].tex);
+                drop(gl, 'Framebuffer', record.targets[i].fb);
+                drop(gl, 'Texture', record.targets[i].tex);
             }
         }
         this.buffers = {};
@@ -623,8 +645,10 @@ var ShadertoyPassGraph = (function() {
         var times = [];
         var dates = [];
         for (var i = 0; i < 4; i++) {
-            var resolved = this.resolveChannel(pass, i, destTarget, currentTextures, options);
+            // Select the unit first: resolveChannel binds textures while it
+            // updates samplers/uploads, which must not disturb unit i-1.
             gl.activeTexture(gl.TEXTURE0 + i);
+            var resolved = this.resolveChannel(pass, i, destTarget, currentTextures, options);
             gl.bindTexture(gl.TEXTURE_2D, resolved.texture || this.blackTexture);
             resolutions[i] = resolved.resolution;
             times[i] = resolved.time || 0;
@@ -746,7 +770,7 @@ var ShadertoyPassGraph = (function() {
         this.destroyPrograms();
         this.destroyTargets();
         if (this.blackTexture) {
-            this.gl.deleteTexture(this.blackTexture);
+            drop(this.gl, 'Texture', this.blackTexture);
             this.blackTexture = null;
         }
     };

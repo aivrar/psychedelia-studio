@@ -170,7 +170,7 @@ void main() {
         vec3 toCamera = normalize(ro - p);
         float diffuse = max(dot(n, sunDir), 0.0);
         float lamp = max(dot(n, toCamera), 0.0) / (1.0 + t * t * 0.0015);
-        float facing = max(dot(n, -rd), 0.0);
+        float facing = clamp(dot(n, -rd), 0.0, 1.0);
         float rim = pow(1.0 - facing, 3.0);
         float ao = 1.0;
         for (int j = 0; j < 3; j++) {

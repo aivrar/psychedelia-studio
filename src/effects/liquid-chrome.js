@@ -120,7 +120,7 @@ void main() {
         vec3 p = ro + rd * tt;
         vec3 n = calcNormal(p);
         vec3 r = reflect(rd, n);
-        float fres = pow(1.0 - max(dot(n, -rd), 0.0), 4.0);
+        float fres = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0);
         vec3 env = world(r);
         float m = floor(u_metal + 0.5);
         if (m < 0.5) col = env * (0.75 + 0.25 * fres);
