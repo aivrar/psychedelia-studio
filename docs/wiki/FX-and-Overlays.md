@@ -18,7 +18,7 @@ The [Post FX Reference](Post-FX-Reference.md) lists every pass, default, valid r
 
 ![Overlay controls](images/overlays-kaleidoscope.png)
 
-The **22 overlays** are grouped into Light Show, Shapes, Atmosphere, and Audio & Text. They include light/strobe accents, lasers, stage effects, particles, graphical shapes, spectrum displays, text, and image layers.
+The **22 overlays** are grouped into Light Show, Shapes, Atmosphere, and Audio & Text. They include light/strobe accents, lasers, stage effects, particles, graphical shapes, spectrum displays, text, and image layers. **Photosensitivity warning:** Strobe and some other overlays and reactions can flash rapidly, which may trigger seizures in people with photosensitive epilepsy, so lower their rate or intensity or switch them off if anyone watching may be affected.
 
 Some overlays animate continuously. Others support **Fire On** or **Sync**, choosing Free Run, Kick, Snare, Hi-hat, Beat, Bar, or Drops. **Every Nth Hit**, where present, reduces trigger density. Without live audio, free-running timing or configured fallback animation can remain active.
 

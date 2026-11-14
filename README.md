@@ -8,6 +8,8 @@ Turn a song into moving visuals. Fly through mathematical worlds, build psychede
 
 Create music visualizer videos, VJ loops, animated backgrounds, and generative art. Start with a preset, choose your colors, add music, and shape the result with live controls. No account or installation is required for the built-in studio.
 
+**Photosensitivity warning:** Psychedelia Studio can produce flashing lights and rapidly changing patterns, which may trigger seizures in people with photosensitive epilepsy. Lower or switch off the Strobe overlay and the Beat Reactor flash reactions, or press Space to pause, if anyone watching may be affected.
+
 **104 effects · 39 Post FX · 22 overlays · 71 shared palettes · live recording and frame-by-frame MP4 rendering**
 
 [**Launch Psychedelia Studio →**](https://aivrar.github.io/psychedelia-studio/)
@@ -69,4 +71,4 @@ Browser tooling uses an installed Chrome or Edge; set `BROWSER` to its executabl
 
 ## Credits and license status
 
-Project by **[aivrar](https://github.com/aivrar)**. See [Third-party notices](THIRD_PARTY_NOTICES.md) for bundled dependencies and shader attribution notes. Psychedelia Studio's own code is released under the [MIT License](LICENSE). Imported shaders and media retain their own rights and terms.
+Project by **[aivrar](https://github.com/aivrar)**. Psychedelia Studio builds on the published work of others, including Tone.js, the simplex noise by Ashima Arts and Stefan Gustavson, Pavel Dobryakov's fluid simulation, Inigo Quilez's distance-function and shader articles, Knighty's pseudo-Kleinian fractal, David Hoskins' hash, Sam Hocevar's colour conversions, Björn Ottosson's Oklab, and the Viridis, Magma, Inferno, Plasma, Turbo, Twilight and Cubehelix colour maps; each is credited with a link and its stated licence in [Third-party notices](THIRD_PARTY_NOTICES.md). Psychedelia Studio's own code is released under the [MIT License](LICENSE), with one exception: the Apollonian Cell and Sphere Chain distance estimator in `src/effects/apollonian-foam-flight.js` is adapted from Inigo Quilez's Shadertoy shader "Apollonian" and stays under [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) (credit the author, no commercial use, share changes under the same licence). Imported shaders and media retain their own rights and terms.

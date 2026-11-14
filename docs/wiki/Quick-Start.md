@@ -16,6 +16,8 @@ Visit **http://localhost:8000** in Chrome or Edge. This command requires Python;
 
 Use a desktop browser with WebGL and hardware acceleration. Chrome/Edge are the tested path for H.264/AAC exports; encoder support is checked at runtime. See [Troubleshooting](Performance-and-Troubleshooting.md) if a control reports unavailable support.
 
+**Photosensitivity warning:** the studio can produce flashing lights and rapidly changing patterns that may trigger seizures in people with photosensitive epilepsy; lower or switch off the Strobe overlay and Beat Reactor flash reactions, or press Space to pause.
+
 ## Your first scene
 
 1. Open **Effect** and search for **Crystal Geode**, **Robot Foundry**, or **Glow Lab**.

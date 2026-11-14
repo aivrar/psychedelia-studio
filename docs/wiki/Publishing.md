@@ -10,7 +10,7 @@ The repository additionally includes the README, contributor/third-party notes, 
 
 The supplied `.gitignore` uses a root allowlist. Experiments, planning files, backups, terminal scratch files, historical internal notes, installed dependencies, generated audit logs/media, and wiki staging output stay out of normal Git additions. It does not delete those files. Curated wiki screenshots, metadata, and the vendored Tone.js license are included.
 
-Before the first public commit, review the staged file list and diff. The project-wide license remains to be chosen by the owner. The supplied Tone.js MIT notice covers that dependency only. Existing shader provenance and imported media terms should be retained; this documentation pass is not a complete license/provenance audit.
+Before each public commit, review the staged file list and diff. The application code and documentation are released under the MIT License (see `LICENSE`), except the Apollonian distance estimator in `src/effects/apollonian-foam-flight.js`, which stays under CC BY-NC-SA 3.0 (see `THIRD_PARTY_NOTICES.md`). The supplied Tone.js MIT notice covers that dependency only. Existing shader provenance and imported media terms should be retained; this documentation pass is not a complete license/provenance audit.
 
 ## Validate the prepared files
 

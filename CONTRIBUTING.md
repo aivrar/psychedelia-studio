@@ -33,4 +33,4 @@ Generated references come from `catalog.json`, captured from the live registry. 
 
 For a bug, include reproduction steps, browser/OS, effect/preset, audio source, FX/overlays, output settings, expected result, and actual result. Attach a short nonprivate screenshot or sample when it helps. For a PR, state what changed, why, how it was validated, and remaining limits.
 
-The project-wide license is currently undecided. Do not introduce code or media whose redistribution terms are unknown; retain dependency and imported shader attribution.
+Contributions are accepted under the project's [MIT License](LICENSE); changes to the Apollonian distance estimator in `src/effects/apollonian-foam-flight.js` fall under its CC BY-NC-SA 3.0 terms (see [Third-party notices](THIRD_PARTY_NOTICES.md)). Do not introduce code or media whose redistribution terms are unknown; retain dependency and imported shader attribution.
