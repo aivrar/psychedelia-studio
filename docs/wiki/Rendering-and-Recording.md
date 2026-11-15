@@ -48,7 +48,7 @@ Choose **Loop (no intro/break)** in the Music arrangement control when you want 
 - **Record app audio** in the offline workflow includes the selected Studio/file soundtrack and drives audio reactions from that offline signal.
 - **No sound** creates video-only output **without audio-driven reactions**. Tempo LFOs and independent scene animation/idle groove can still move.
 - Full/remaining duration can still be measured from a file with No sound selected.
-- **Capture Playback** cannot be replayed as an offline soundtrack. Use Live recording for that source.
+- **Capture Playback** (PC audio) cannot be replayed as an offline soundtrack. Use Live recording for that source. If Record Mode is Smooth MP4 when you press Record with Capture Playback selected, the app switches to Live recording and says so.
 
 ## Getting a smooth 60 FPS file
 

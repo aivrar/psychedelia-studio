@@ -460,6 +460,23 @@
                     showNotice('Recording is not supported in this browser.', 'error');
                     return;
                 }
+                // Capture Playback is a live stream, so it cannot be rendered frame by
+                // frame. Record it live instead of refusing with "choose an audio file".
+                var modeSel = document.getElementById('recMode'), audioSel = document.getElementById('recAudio');
+                var switchedToLive = false;
+                if (modeSel && modeSel.value === 'smooth' && audioSel && audioSel.value !== 'none' &&
+                        typeof AudioAnalysis !== 'undefined' && AudioAnalysis.getSource() === 'capture') {
+                    modeSel.value = 'live';
+                    syncRecordOptions();          // restores the live choices, which may have had sound off
+                    audioSel.value = 'all';
+                    // Smooth mode turns "Until I press stop" into the loop length; a
+                    // capture of whatever is playing should not stop after one loop.
+                    var capLen = document.getElementById('recLength');
+                    if (capLen && capLen.value === 'preview') { capLen.value = 'manual'; capLen.dispatchEvent(new Event('change', { bubbles: true })); }
+                    syncRecordOptions();
+                    modeSel.dispatchEvent(new Event('change', { bubbles: true }));   // keeps the stored choice in step
+                    switchedToLive = true;
+                }
                 var canvas = Renderer.getCanvas();
                 var fps = parseInt(document.getElementById('fpsSelect').value, 10) || 30;
                 // Recording Length: until stopped, the Loop Length, or a number of seconds.
@@ -476,12 +493,14 @@
                     started = VideoExport.startRecording(canvas, fps);
                 }
                 if (!started) {
-                    showNotice(VideoExport.getLastError ? VideoExport.getLastError() : 'Recording failed.', 'error');
+                    showNotice((VideoExport.getLastError ? VideoExport.getLastError() : 'Recording failed.') +
+                        (switchedToLive ? ' Record Mode was switched to Live recording, because Capture Playback can only be recorded live.' : ''), 'error');
                 } else {
                     var info = VideoExport.getLastInfo ? VideoExport.getLastInfo() : '';
                     var stopHint = duration > 0 ? 'Stops after ' + formatSeconds(duration) + ', or press R to stop early.' : 'Press R or click REC to stop.';
                     if (VideoExport.getOptions().mode === 'smooth') stopHint = 'Rendering every frame. This can take longer than ' + formatSeconds(duration) + '. Press R to save early.';
-                    showNotice('Recording ' + (info || 'started') + '. ' + stopHint, 'success', 5000);
+                    var liveNote = switchedToLive ? 'Capture Playback can only be recorded live, so Record Mode was switched to Live recording. ' : '';
+                    showNotice(liveNote + 'Recording ' + (info || 'started') + '. ' + stopHint, 'success', switchedToLive ? 10000 : 5000);
                 }
             }
         });

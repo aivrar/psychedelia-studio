@@ -92,29 +92,39 @@ var MusicControls = (function() {
                     '<select id="audioSourceSelect">' +
                         '<option value="studio">Studio Music</option>' +
                         '<option value="file">Audio File</option>' +
-                        '<option value="capture">Capture Playback</option>' +
+                        '<option value="capture">PC Audio (Capture Playback)</option>' +
                     '</select></div>' +
-                '<input type="file" id="audioFileInput" class="hidden" accept="audio/*">' +
-                '<div class="audio-file-row">' +
-                    '<button id="audioFileChoose" class="sm-btn" title="Choose audio file">Choose</button>' +
-                    '<button id="audioFilePlay" class="sm-btn" title="Play or pause selected audio file">&#9654;</button>' +
-                    '<button id="audioFileClear" class="sm-btn" title="Clear selected audio file">Clear</button>' +
+                // Only the selected source's block is shown (refreshAudioUi).
+                '<div id="audioFileBlock" class="audio-source-block hidden">' +
+                    '<input type="file" id="audioFileInput" class="hidden" accept="audio/*">' +
+                    '<div class="audio-file-row">' +
+                        '<button id="audioFileChoose" class="sm-btn" title="Choose audio file">Choose</button>' +
+                        '<button id="audioFilePlay" class="sm-btn" title="Play or pause selected audio file">&#9654;</button>' +
+                        '<button id="audioFileClear" class="sm-btn" title="Clear selected audio file">Clear</button>' +
+                    '</div>' +
+                    '<div id="audioFileName" class="audio-file-name">No file selected</div>' +
+                    '<div class="param-row"><label>Position</label><div class="slider-wrap">' +
+                        '<input type="range" id="audioFileSeek" min="0" max="0" value="0" step="0.01">' +
+                        '<span class="val-display" id="audioFileTime">0:00</span></div></div>' +
+                    '<div class="param-row"><label>File Gain</label><div class="slider-wrap">' +
+                        '<input type="range" id="audioFileGain" min="0" max="2" value="1" step="0.01">' +
+                        '<span class="val-display" id="audioFileGainVal">1.00</span></div></div>' +
+                    '<div class="overlay-toggle-row audio-loop-row">' +
+                        '<input type="checkbox" id="audioFileLoop"><label for="audioFileLoop">Loop file</label></div>' +
                 '</div>' +
-                '<div id="audioFileName" class="audio-file-name">No file selected</div>' +
-                '<div class="param-row"><label>Position</label><div class="slider-wrap">' +
-                    '<input type="range" id="audioFileSeek" min="0" max="0" value="0" step="0.01">' +
-                    '<span class="val-display" id="audioFileTime">0:00</span></div></div>' +
-                '<div class="param-row"><label>File Gain</label><div class="slider-wrap">' +
-                    '<input type="range" id="audioFileGain" min="0" max="2" value="1" step="0.01">' +
-                    '<span class="val-display" id="audioFileGainVal">1.00</span></div></div>' +
-                '<div class="overlay-toggle-row audio-loop-row">' +
-                    '<input type="checkbox" id="audioFileLoop"><label for="audioFileLoop">Loop file</label></div>' +
-                '<div class="audio-capture-row">' +
-                    '<button id="audioCaptureStart" class="sm-btn" title="Capture playback audio from a selected tab, window, or screen">Capture</button>' +
-                    '<button id="audioCaptureStop" class="sm-btn" title="Stop capture playback">Stop</button>' +
+                '<div id="audioCaptureBlock" class="audio-source-block hidden">' +
+                    '<ol class="audio-capture-steps">' +
+                        '<li>Press <b>Connect PC audio</b>.</li>' +
+                        '<li>In the browser&#8217;s dialog choose <b>Entire screen</b> for any app&#8217;s sound, or a browser tab for just that tab. A single window has no sound.</li>' +
+                        '<li>Switch on the share-audio option in that dialog, then press <b>Share</b>.</li>' +
+                    '</ol>' +
+                    '<div class="audio-capture-row">' +
+                        '<button id="audioCaptureStart" class="sm-btn audio-capture-btn" type="button">Connect PC audio</button>' +
+                        '<button id="audioCaptureStop" class="sm-btn audio-capture-btn hidden" type="button" title="Stop sharing PC audio">Disconnect</button>' +
+                    '</div>' +
+                    '<div id="audioCaptureStatus" class="audio-source-status" aria-live="polite"></div>' +
                 '</div>' +
-                '<div id="audioCaptureStatus" class="audio-source-status">Capture Playback idle.</div>' +
-                '<div id="audioSourceStatus" class="audio-source-status">Studio Music selected.</div>' +
+                '<div id="audioSourceStatus" class="audio-source-status" aria-live="polite"></div>' +
             '</div>' +
 
             '<div class="audio-source-controls reactor-controls collapsible" data-section="reactor">' +
@@ -525,6 +535,15 @@ var MusicControls = (function() {
     }
 
     // ------------------------------------------------------------ Audio source
+    // The panel shows the source the user picked, not only the engine's source:
+    // a cancelled or failed PC audio attempt (or Disconnect) makes the engine fall
+    // back to Studio Music, but the user is still trying to connect, so the PC
+    // Audio block and its message stay on screen. The pick is dropped when the
+    // user chooses another option or the engine moves to a different non-Studio
+    // source by another route (file chosen elsewhere, setup load).
+    var panelSource = null;
+    var captureAttempted = false;   // show attempt results only after Connect / Disconnect
+
     function wireAudioEvents() {
         if (typeof AudioAnalysis === 'undefined') return;
 
@@ -532,7 +551,20 @@ var MusicControls = (function() {
         var fileInput = el('audioFileInput');
 
         sourceSelect.addEventListener('change', function() {
-            AudioAnalysis.setSource(this.value);
+            var pick = this.value;
+            panelSource = pick;
+            captureAttempted = false;
+            // The file's Play/Pause button is about to be hidden, so the file
+            // must not keep playing with nothing on screen to stop it.
+            if (pick !== 'file' && AudioAnalysis.getFileStatus().playing) AudioAnalysis.pauseFile();
+            if (pick === 'capture') {
+                // The share dialog opens from the Connect button only. Until a
+                // sound is shared, visuals follow Studio Music.
+                var current = AudioAnalysis.getSource();
+                if (current !== 'capture' && current !== 'studio') AudioAnalysis.setSource('studio');
+            } else {
+                AudioAnalysis.setSource(pick);
+            }
             refreshAudioUi();
         });
         el('audioFileChoose').addEventListener('click', function() { fileInput.click(); });
@@ -551,6 +583,7 @@ var MusicControls = (function() {
             }
         });
         el('audioFileClear').addEventListener('click', function() {
+            panelSource = 'file';
             AudioAnalysis.clearFile();
             fileInput.value = '';
             refreshAudioUi();
@@ -569,11 +602,17 @@ var MusicControls = (function() {
             refreshAudioUi();
         });
         el('audioCaptureStart').addEventListener('click', function() {
+            panelSource = 'capture';
+            captureAttempted = true;
             AudioAnalysis.startCapture().then(refreshAudioUi);
         });
         el('audioCaptureStop').addEventListener('click', function() {
+            panelSource = 'capture';
+            captureAttempted = true;
             AudioAnalysis.stopCapture();
             refreshAudioUi();
+            var start = el('audioCaptureStart');
+            if (start && !start.disabled) start.focus();
         });
 
         AudioAnalysis.onStatusChange(refreshAudioUi);
@@ -590,13 +629,19 @@ var MusicControls = (function() {
         var currentSource = AudioAnalysis.getSource();
         var fileStatus = AudioAnalysis.getFileStatus();
         var captureStatus = AudioAnalysis.getCaptureStatus ? AudioAnalysis.getCaptureStatus() : { active: false, audioTrackCount: 0, message: '' };
-        var routerStatus = AudioAnalysis.getStatus();
-        var status = currentSource === 'file' ? fileStatus : (currentSource === 'capture' ? captureStatus : routerStatus);
-        var fileActive = currentSource === 'file';
         var hasFile = !!fileStatus.hasFile;
         var captureSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
-        sourceSelect.value = currentSource === 'file' || currentSource === 'capture' ? currentSource : 'studio';
+        var engineShown = currentSource === 'file' || currentSource === 'capture' ? currentSource : 'studio';
+        if (panelSource && engineShown !== 'studio' && engineShown !== panelSource) {
+            panelSource = null;
+            captureAttempted = false;
+        }
+        var shown = panelSource || engineShown;
+        if (sourceSelect.value !== shown) sourceSelect.value = shown;
+        el('audioFileBlock').classList.toggle('hidden', shown !== 'file');
+        el('audioCaptureBlock').classList.toggle('hidden', shown !== 'capture');
+        el('audioSourceStatus').classList.toggle('hidden', shown === 'capture');
         el('audioFileName').textContent = fileStatus.fileName || 'No file selected';
         el('audioFilePlay').innerHTML = fileStatus.playing ? '&#10074;&#10074;' : '&#9654;';
         el('audioFilePlay').disabled = !hasFile;
@@ -620,14 +665,19 @@ var MusicControls = (function() {
         loop.checked = !!fileStatus.loop;
         loop.disabled = !hasFile;
 
-        el('audioCaptureStart').disabled = !!captureStatus.active || captureStatus.state === 'permission' || !captureSupported;
-        el('audioCaptureStop').disabled = !captureStatus.hasCapture && captureStatus.state !== 'permission';
-        el('audioCaptureStatus').textContent = captureStatus.active ?
-            'Capture active: ' + captureStatus.audioTrackCount + ' audio track' + (captureStatus.audioTrackCount === 1 ? '' : 's') + '.' :
-            (captureStatus.message || (captureSupported ? 'Capture Playback idle.' : 'Capture Playback is not available in this browser.'));
+        // PC Audio: one button that says what happens next.
+        var connected = !!captureStatus.active;
+        var waiting = captureStatus.state === 'permission';
+        var start = el('audioCaptureStart');
+        var stop = el('audioCaptureStop');
+        start.classList.toggle('hidden', connected);
+        stop.classList.toggle('hidden', !connected);
+        start.disabled = connected || waiting || !captureSupported;
+        stop.disabled = !connected;
+        setText(start, waiting ? 'Waiting for the browser dialog...' : 'Connect PC audio');
+        setText(el('audioCaptureStatus'), captureMessage(captureStatus, currentSource, captureSupported));
 
-        var message = status.message || (fileActive ? 'Audio File selected.' : (currentSource === 'capture' ? 'Capture Playback selected.' : 'Studio Music selected.'));
-        el('audioSourceStatus').textContent = message;
+        setText(el('audioSourceStatus'), shown === 'file' ? fileMessage(fileStatus, currentSource) : studioMessage());
         if (analysis) {
             updateMeter('audioMeterLevel', analysis.level);
             updateMeter('audioMeterBass', analysis.bass);
@@ -638,6 +688,45 @@ var MusicControls = (function() {
         refreshReactorStatus();
         refreshLinkParams(false);
         if (typeof Music !== 'undefined' && Music.isPlaying && Music.isPlaying()) syncNowPlaying();
+    }
+
+    // Status lines refresh twice a second; only touch them when the words change
+    // so screen readers do not repeat them.
+    function setText(node, text) {
+        if (node && node.textContent !== text) node.textContent = text;
+    }
+
+    function studioMessage() {
+        var playing = typeof Music !== 'undefined' && Music.isPlaying && Music.isPlaying();
+        return playing ? 'Visuals follow Studio Music.' : 'Visuals follow Studio Music. Press Play at the top of this tab to hear it.';
+    }
+
+    function fileMessage(fileStatus, currentSource) {
+        var followsStudio = currentSource !== 'file';
+        if (!fileStatus.hasFile) {
+            return 'Press Choose to pick an audio file.' + (followsStudio ? ' Visuals follow Studio Music for now.' : '');
+        }
+        if (followsStudio) return 'Visuals follow Studio Music for now. Press play to use this file.';
+        if (fileStatus.playing) return 'Playing. Visuals follow this file.';
+        return fileStatus.message || 'Audio file paused.';
+    }
+
+    // Engine capture states mapped to plain words that say what to do next.
+    function captureMessage(cs, currentSource, supported) {
+        if (!supported) return 'This browser cannot share PC audio. Use Edge or Chrome on a computer.';
+        if (cs.active) return 'Connected. Visuals follow your PC audio.';
+        if (cs.state === 'permission') return 'Choose what to share in the browser’s dialog (steps 2 and 3).';
+        var followsStudio = currentSource !== 'capture';
+        var text = followsStudio ? 'Not connected: visuals follow Studio Music for now.' : 'Not connected yet. Press Connect PC audio.';
+        if (!captureAttempted) return text;
+        var note = followsStudio ? ' Visuals follow Studio Music for now.' : '';
+        if (cs.state === 'no-audio-track') return 'That choice had no sound. Connect again and pick Entire screen or a tab, with share audio switched on.' + note;
+        if (cs.state === 'blocked') return 'Nothing was shared. Press Connect PC audio to try again.' + note;
+        if (cs.state === 'unsupported') return 'This browser cannot analyse shared audio. Use Edge or Chrome on a computer.' + note;
+        if (cs.state === 'error') return 'The shared sound could not be connected. Press Connect PC audio to try again.' + note;
+        if (cs.message === 'Capture ended.') return 'Sharing was stopped from the browser. Press Connect PC audio to connect again.' + note;
+        if (followsStudio) return 'Disconnected: visuals follow Studio Music for now.';
+        return text;
     }
 
     function formatTime(seconds) {
@@ -662,5 +751,7 @@ var MusicControls = (function() {
         el('reactorPreset').dataset.current = el('reactorPreset').value;
     }
 
-    return { init: init, refreshReactor: refreshReactor, refresh: function() { syncFromMusic(); syncReactor(); refreshLinkParams(true); refreshAudioUi(); } };
+    // refresh(true) is the setup-load call: the setup decides the source, so the
+    // panel follows the engine again instead of the user's earlier pick.
+    return { init: init, refreshReactor: refreshReactor, refresh: function(sourceReplaced) { if (sourceReplaced) { panelSource = null; captureAttempted = false; } syncFromMusic(); syncReactor(); refreshLinkParams(true); refreshAudioUi(); } };
 })();

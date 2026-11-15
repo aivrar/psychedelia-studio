@@ -304,7 +304,7 @@ var Setups = (function() {
             Renderer.setViewZoom(m.zoom); Renderer.setViewZoomSpeed(m.zoomSpeed); Renderer.setViewZoomDepth(m.zoomDepth); Renderer.setSeed(state.seed, state.seedVec);
             ['fx', 'overlays', 'reactor'].forEach(function(scope) { var mode = state.auto && state.auto[scope]; Looks.setAuto(scope, ['off', '4', '8', '16', 'section'].indexOf(mode) >= 0 ? mode : 'off'); });
             Looks.setConfiguration(state.shuffle);
-            MusicControls.refresh(); if (PostProcessControls.rebuild) PostProcessControls.rebuild(); OverlayControls.rebuild();
+            MusicControls.refresh(true); if (PostProcessControls.rebuild) PostProcessControls.rebuild(); OverlayControls.rebuild();
             [['animSpeed', m.speed], ['rotSpeed', m.spin], ['viewZoom', m.zoom], ['viewZoomSpeed', m.zoomSpeed], ['viewZoomDepth', m.zoomDepth]].forEach(function(row) {
                 var control = el(row[0]); if (control) { control.value = row[1]; control.dispatchEvent(new Event('input', { bubbles: true })); }
             });

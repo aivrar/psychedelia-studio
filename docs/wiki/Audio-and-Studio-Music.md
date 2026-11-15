@@ -10,7 +10,7 @@ The **Audio** tab brings together local setups, generated music, source selectio
 | --- | --- | --- | --- |
 | **Studio Music** | Music → Play | Generated soundtrack, exact sequencer beats and section events | Yes, as a new take using current settings |
 | **Audio File** | Choose a file, then use its play button | File playback, frequency analysis, detected hits and tempo | Yes, from the chosen file position or full-track mode |
-| **Capture Playback** | Capture, then select a browser-provided tab/window/screen source with audio | Captured audio and detected beats | Live recording only |
+| **PC Audio (Capture Playback)** | Connect PC audio, then share **Entire screen** or a browser tab with share audio switched on | Whatever the PC or tab is playing, and detected beats | Live recording only |
 
 The source router also supplies fallback analysis for shader channels when live analysis is unavailable. This is synthetic visual data, not a fourth playable song source in the main source selector.
 
@@ -51,11 +51,19 @@ Gain runs from 0 to 2. Zero gain is intentionally silent and does not represent 
 
 **Match full audio track** renders from the beginning of the uploaded file. **Remaining audio** starts at the current file playhead. **Custom duration** with Audio File selected also starts at that playhead and honors the loop setting. Full and remaining modes ignore file looping. See [Rendering and Recording](Rendering-and-Recording.md).
 
-## Capture Playback
+## PC Audio (Capture Playback)
 
-Press **Capture** and use the browser's selection dialog. Whether audio is available depends on the browser, OS, and chosen surface. A video stream without an audio track is rejected with a source-status message. Selecting a screen does not guarantee that all system sound will be captured.
+Use this to make the visuals react to whatever your computer is playing, such as a music app or a video in another tab. Choose **PC Audio (Capture Playback)** under Audio Source; the panel then shows only three steps, one button and one status line:
 
-Press **Stop** to end capture. Switching away from Capture also stops its tracks. Permission and the browser picker are required again for a later capture; a saved setup cannot silently resume it.
+1. Press **Connect PC audio**. The button reads *Waiting for the browser dialog...* while the browser's share dialog is open.
+2. In that dialog choose **Entire screen** for any app's sound, or a browser tab for just that tab's sound. A single window has no sound.
+3. Switch on the share-audio option in the dialog, then press **Share**.
+
+When it works, the status reads *Connected. Visuals follow your PC audio.* and the button becomes **Disconnect**. If the choice had no sound, or the dialog was cancelled, the panel stays on PC Audio and the status says what to try next; meanwhile the visuals follow Studio Music. Whether sound is available depends on the browser and operating system: Edge and Chrome on Windows can share the whole system's sound, while some systems only offer tab audio.
+
+Press **Disconnect**, or the browser's own *Stop sharing* bar, to end it. Picking another source also stops sharing. Permission and the share dialog are needed again for a later connection; a saved setup cannot silently resume it.
+
+Pressing **Record** while PC Audio is the source records live: if Record Mode is Smooth MP4, the app switches it to Live recording and says so, because a live stream cannot be rendered frame by frame. See [Rendering and Recording](Rendering-and-Recording.md).
 
 Capture Playback uses display capture. The separate Shadertoy channel system can explicitly request webcam or microphone inputs; those are different controls and permissions.
 

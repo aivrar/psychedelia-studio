@@ -43,6 +43,8 @@ var RenderControls = (function() {
                     var file = AudioAnalysis.getFileStatus();
                     message += ' ' + (plan.lengthMode === 'audio' ? 'Full track: ' : 'From the current playhead: ') + file.fileName + '.';
                     if (plan.audio !== 'none') message += ' Includes this file as the soundtrack.';
+                    // The length modes always use the loaded file, whatever the Audio Source is.
+                    if (AudioAnalysis.getSource() === 'capture') message += ' Capture Playback is not part of a render; use the Record button to record what is playing.';
                 } else if (plan.audio !== 'none') {
                     message += plan.audioSettings.source === 'studio' ? ' Studio creates a new take.' : ' Audio starts at the current file position.';
                 }

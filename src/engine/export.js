@@ -1113,6 +1113,8 @@ var VideoExport = (function() {
         });
     }
 
+    // Capture Playback is a live stream: there is nothing to replay for a frame-by-frame render.
+    var CAPTURE_NEEDS_LIVE = 'Capture Playback can only be recorded live. Use the Record button with Record Mode set to Live recording, or pick Studio Music or an Audio File to render.';
     function startRecording(canvas, fps, durationSec) {
         if (recording) return setLastError('A recording is already running.');
         if (finalizing) return setLastError('Still saving the last recording. Try again in a moment.');
@@ -1134,7 +1136,7 @@ var VideoExport = (function() {
             if (typeof Timeline !== 'undefined' && Timeline.isPlaying()) return setLastError('Pause the timeline before exporting a smooth clip.');
             if (options.audio !== 'none' && (!wcSupport.aac || typeof OfflineAudio === 'undefined')) return setLastError('Smooth MP4 with sound needs AAC audio encoding support.');
             var soundtrackSource = renderJob ? renderJob.plan.audioSettings.source : (typeof AudioAnalysis !== 'undefined' ? AudioAnalysis.getSource() : 'studio');
-            if (options.audio !== 'none' && ['studio', 'file'].indexOf(soundtrackSource) < 0) return setLastError('Choose Studio Music or an Audio File for Smooth MP4 with sound.');
+            if (options.audio !== 'none' && ['studio', 'file'].indexOf(soundtrackSource) < 0) return setLastError(soundtrackSource === 'capture' ? CAPTURE_NEEDS_LIVE : 'Choose Studio Music or an Audio File for Smooth MP4 with sound.');
         }
         timedCallback = null;
         chunks = [];
@@ -1330,7 +1332,7 @@ var VideoExport = (function() {
         if (!isFinite(duration) || duration <= 0 || duration > 3600) return invalid('Set a render length greater than 0 and up to 3600 seconds.');
         if (!isFinite(fps) || fps < 1 || fps > 120) return invalid('Choose a frame rate between 1 and 120 FPS.');
         if (audio !== 'none' && duration > 600) return invalid('Rendering with sound supports up to 10 minutes. Choose a shorter duration or remaining audio.');
-        if (audio !== 'none' && ['studio', 'file'].indexOf(audioSettings.source) < 0) return invalid('Choose Studio Music or an Audio File for rendering with sound.');
+        if (audio !== 'none' && ['studio', 'file'].indexOf(audioSettings.source) < 0) return invalid(audioSettings.source === 'capture' ? CAPTURE_NEEDS_LIVE : 'Choose Studio Music or an Audio File for rendering with sound.');
         if (audio !== 'none' && audioSettings.source === 'file' && !AudioAnalysis.getFile()) return invalid('Choose an audio file before rendering with sound.');
         return { valid: true, duration: duration, fps: fps, audio: audio, audioSettings: audioSettings, lengthMode: mode };
     }

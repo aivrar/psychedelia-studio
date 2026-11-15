@@ -963,24 +963,31 @@ kbd {
     margin-bottom: 8px;
 }
 
-.audio-capture-row {
-    display: grid;
-    grid-template-columns: 1fr 58px;
-    gap: 6px;
-    margin-top: 8px;
-}
-
 .audio-file-row .sm-btn {
     min-width: 0;
     padding-left: 0;
     padding-right: 0;
 }
 
-.audio-capture-row .sm-btn {
-    min-width: 0;
-    padding-left: 0;
-    padding-right: 0;
+/* PC Audio: numbered steps, one button, one status line. */
+.audio-capture-steps {
+    margin: 0 0 10px;
+    padding-left: 18px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-dim);
 }
+.audio-capture-steps li + li { margin-top: 3px; }
+.audio-capture-steps b { color: var(--text-muted); font-weight: 600; }
+
+.audio-capture-btn {
+    width: 100%;
+    padding: 8px 10px;
+    border-color: var(--accent);
+    color: var(--accent-glow);
+    white-space: normal;
+}
+.audio-capture-btn:disabled { opacity: 0.55; cursor: default; border-color: var(--border); color: var(--text-muted); }
 
 .audio-file-name,
 .audio-source-status {
