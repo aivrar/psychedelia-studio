@@ -712,9 +712,23 @@ var MusicControls = (function() {
     }
 
     // Engine capture states mapped to plain words that say what to do next.
+    // What the browser reports for the shared sound, in a few words, so poor
+    // recorded sound can be told apart from a browser that is "cleaning up"
+    // the music as if it were a voice call.
+    function captureQualityNote(a) {
+        if (!a) return '';
+        var bits = [];
+        if (a.channelCount) bits.push(a.channelCount >= 2 ? 'stereo' : 'mono');
+        if (a.sampleRate) bits.push(Math.round(a.sampleRate / 100) / 10 + ' kHz');
+        var cleanUp = a.echoCancellation === true || a.noiseSuppression === true || a.autoGainControl === true || a.voiceIsolation === true;
+        var note = bits.length ? ' Sound: ' + bits.join(', ') + '.' : '';
+        if (cleanUp) note += ' The browser is applying voice clean-up to it, which can make recordings sound thin.';
+        return note;
+    }
+
     function captureMessage(cs, currentSource, supported) {
         if (!supported) return 'This browser cannot share PC audio. Use Edge or Chrome on a computer.';
-        if (cs.active) return 'Connected. Visuals follow your PC audio.';
+        if (cs.active) return 'Connected. Visuals follow your PC audio.' + captureQualityNote(cs.audioSettings);
         if (cs.state === 'permission') return 'Choose what to share in the browser’s dialog (steps 2 and 3).';
         var followsStudio = currentSource !== 'capture';
         var text = followsStudio ? 'Not connected: visuals follow Studio Music for now.' : 'Not connected yet. Press Connect PC audio.';

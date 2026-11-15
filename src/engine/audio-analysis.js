@@ -463,6 +463,7 @@ var AudioAnalysis = (function() {
             timeData: new Uint8Array(SIZE),
             freqData: new Uint8Array(SIZE),
             audioTrackCount: 0,
+            audioSettings: null,
             active: false,
             state: 'idle',
             message: 'Capture Playback idle.'
@@ -520,15 +521,39 @@ var AudioAnalysis = (function() {
             active: fields.active,
             available: fields.hasCapture && fields.audioTrackCount > 0,
             audioTrackCount: fields.audioTrackCount,
-            hasCapture: fields.hasCapture
+            hasCapture: fields.hasCapture,
+            // What the browser reports for the captured sound (for diagnosing
+            // poor recorded sound): processing flags, channels, rate, surface.
+            audioSettings: entry.audioSettings || null
         };
     }
 
+    var CAPTURE_SETTING_KEYS = ['echoCancellation', 'noiseSuppression', 'autoGainControl', 'voiceIsolation', 'channelCount',
+        'sampleRate', 'sampleSize', 'latency', 'suppressLocalAudioPlayback'];
+    function readCaptureSettings(stream, advanced) {
+        var out = { requested: advanced ? 'processing-off' : 'plain' };
+        try {
+            var audio = stream.getAudioTracks()[0];
+            var s = audio && audio.getSettings ? audio.getSettings() : {};
+            CAPTURE_SETTING_KEYS.forEach(function(k) { if (s[k] !== undefined) out[k] = s[k]; });
+            out.label = audio ? String(audio.label || '') : '';
+            var video = stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+            var vs = video && video.getSettings ? video.getSettings() : {};
+            if (vs.displaySurface) out.displaySurface = vs.displaySurface;
+        } catch (err) { /* noop */ }
+        return out;
+    }
+
+    // Captured playback is music, not a voice call: ask the browser not to run
+    // echo cancellation, noise suppression or auto gain on it and to keep it
+    // stereo (those make music sound thin and watery). Plain values are only
+    // preferences, so they cannot make the request fail; engines that reject
+    // the extra options with a TypeError get the plain request instead.
     function displayCaptureConstraints(advanced) {
         if (!advanced) return { video: true, audio: true };
         return {
             video: true,
-            audio: true,
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
             systemAudio: 'include',
             windowAudio: 'system',
             selfBrowserSurface: 'exclude',
@@ -565,10 +590,15 @@ var AudioAnalysis = (function() {
         var generation = captureGeneration;
         entry = makeCaptureEntry();
         entry.message = 'Waiting for capture selection.';
+        entry.audioSettings = null;
+        var advanced = true;
         updateCaptureStatus('permission', entry.message, true);
         return navigator.mediaDevices.getDisplayMedia(displayCaptureConstraints(true)).catch(function(err) {
             if (generation !== captureGeneration) throw err;
-            if (err && err.name === 'TypeError') return navigator.mediaDevices.getDisplayMedia(displayCaptureConstraints(false));
+            if (err && err.name === 'TypeError') {
+                advanced = false;
+                return navigator.mediaDevices.getDisplayMedia(displayCaptureConstraints(false));
+            }
             throw err;
         }).then(function(stream) {
             if (generation !== captureGeneration) { stopStream(stream); return false; }
@@ -592,6 +622,7 @@ var AudioAnalysis = (function() {
                 try {
                     entry.stream = stream;
                     entry.audioTrackCount = audioTracks.length;
+                    entry.audioSettings = readCaptureSettings(stream, advanced);
                     entry.sourceNode = ctx.createMediaStreamSource(stream);
                     entry.gainNode = ctx.createGain();
                     entry.gainNode.gain.value = 1;
@@ -617,6 +648,7 @@ var AudioAnalysis = (function() {
                     disconnectCapture(entry);
                     entry.stream = null;
                     entry.audioTrackCount = 0;
+                    entry.audioSettings = null;
                     entry.active = false;
                     source = previousSource || 'studio';
                     entry.message = 'Capture Playback analyser failed to initialize.';
@@ -642,6 +674,7 @@ var AudioAnalysis = (function() {
         stopStream(stream);
         disconnectCapture(entry);
         entry.audioTrackCount = 0;
+        entry.audioSettings = null;
         entry.state = 'idle';
         entry.message = typeof message === 'string' ? message : 'Capture Playback stopped.';
         if (source === 'capture') source = 'studio';
