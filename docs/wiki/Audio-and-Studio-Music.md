@@ -10,7 +10,7 @@ The **Audio** tab brings together local setups, generated music, source selectio
 | --- | --- | --- | --- |
 | **Studio Music** | Music → Play | Generated soundtrack, exact sequencer beats and section events | Yes, as a new take using current settings |
 | **Audio File** | Choose a file, then use its play button | File playback, frequency analysis, detected hits and tempo | Yes, from the chosen file position or full-track mode |
-| **PC Audio (Capture Playback)** | Connect PC audio, then share **Entire screen** or a browser tab with share audio switched on | Whatever the PC or tab is playing, and detected beats | Live recording only |
+| **PC Audio (Capture Playback)** | Connect PC audio, then share the app's window, **Entire screen** or a browser tab with share audio switched on | Whatever the PC or tab is playing, and detected beats | Live recording only |
 
 The source router also supplies fallback analysis for shader channels when live analysis is unavailable. This is synthetic visual data, not a fourth playable song source in the main source selector.
 
@@ -56,7 +56,7 @@ Gain runs from 0 to 2. Zero gain is intentionally silent and does not represent 
 Use this to make the visuals react to whatever your computer is playing, such as a music app or a video in another tab. Choose **PC Audio (Capture Playback)** under Audio Source; the panel then shows only three steps, one button and one status line:
 
 1. Press **Connect PC audio**. The button reads *Waiting for the browser dialog...* while the browser's share dialog is open.
-2. In that dialog choose **Entire screen** for any app's sound, or a browser tab for just that tab's sound. A single window has no sound.
+2. In that dialog choose the app's **Window** or **Entire screen**, or a browser tab for just that tab's sound. Some browsers offer no audio for a single window; use Entire screen or a tab there.
 3. Switch on the share-audio option in the dialog, then press **Share**.
 
 When it works, the status reads *Connected. Visuals follow your PC audio.* and the button becomes **Disconnect**. If the choice had no sound, or the dialog was cancelled, the panel stays on PC Audio and the status says what to try next; meanwhile the visuals follow Studio Music. Whether sound is available depends on the browser and operating system: Edge and Chrome on Windows can share the whole system's sound, while some systems only offer tab audio.

@@ -115,7 +115,7 @@ var MusicControls = (function() {
                 '<div id="audioCaptureBlock" class="audio-source-block hidden">' +
                     '<ol class="audio-capture-steps">' +
                         '<li>Press <b>Connect PC audio</b>.</li>' +
-                        '<li>In the browser&#8217;s dialog choose <b>Entire screen</b> for any app&#8217;s sound, or a browser tab for just that tab. A single window has no sound.</li>' +
+                        '<li>In the browser&#8217;s dialog choose the app&#8217;s <b>Window</b> or <b>Entire screen</b>, or a browser tab for just that tab.</li>' +
                         '<li>Switch on the share-audio option in that dialog, then press <b>Share</b>.</li>' +
                     '</ol>' +
                     '<div class="audio-capture-row">' +
@@ -734,7 +734,7 @@ var MusicControls = (function() {
         var text = followsStudio ? 'Not connected: visuals follow Studio Music for now.' : 'Not connected yet. Press Connect PC audio.';
         if (!captureAttempted) return text;
         var note = followsStudio ? ' Visuals follow Studio Music for now.' : '';
-        if (cs.state === 'no-audio-track') return 'That choice had no sound. Connect again and pick Entire screen or a tab, with share audio switched on.' + note;
+        if (cs.state === 'no-audio-track') return 'That choice had no sound. Connect again with share audio switched on; if a window offers no audio switch, pick Entire screen or a tab.' + note;
         if (cs.state === 'blocked') return 'Nothing was shared. Press Connect PC audio to try again.' + note;
         if (cs.state === 'unsupported') return 'This browser cannot analyse shared audio. Use Edge or Chrome on a computer.' + note;
         if (cs.state === 'error') return 'The shared sound could not be connected. Press Connect PC audio to try again.' + note;
