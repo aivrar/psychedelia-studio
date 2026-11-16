@@ -206,7 +206,8 @@ var AudioAnalysis = (function() {
             gainNode: null,
             analyser: null,
             timeData: new Uint8Array(SIZE),
-            freqData: new Uint8Array(SIZE)
+            freqData: new Uint8Array(SIZE),
+            freqDb: new Float32Array(SIZE)
         };
         audio.addEventListener('loadedmetadata', function() {
             fileEntry.ready = true;
@@ -462,6 +463,7 @@ var AudioAnalysis = (function() {
             analyser: null,
             timeData: new Uint8Array(SIZE),
             freqData: new Uint8Array(SIZE),
+            freqDb: new Float32Array(SIZE),
             audioTrackCount: 0,
             audioSettings: null,
             active: false,
@@ -712,6 +714,16 @@ var AudioAnalysis = (function() {
         }
     }
 
+    // The byte spectrum stops at maxDecibels (-30 dB), and loud mastered bass
+    // sits above that, so its bins stay pinned at 255 and kicks vanish from
+    // the flux. The Beat Reactor reads these unclipped decibels instead; the
+    // byte data stays as it was for spectrum overlays and Shadertoy.
+    function readDecibels(entry) {
+        entry.freqDbOk = false;
+        if (!entry.freqDb || !entry.analyser.getFloatFrequencyData) return;
+        try { entry.analyser.getFloatFrequencyData(entry.freqDb); entry.freqDbOk = true; } catch (err) { /* byte data only */ }
+    }
+
     function clampByte(value) {
         if (!isFinite(value)) return 0;
         return Math.max(0, Math.min(255, Math.round(value)));
@@ -827,6 +839,7 @@ var AudioAnalysis = (function() {
             waveform: waveform,
             fft: fft,
             spectrum: providerAnalysis.fft || fft,
+            spectrumDb: providerAnalysis.spectrumDb || null,
             signalVersion: signalVersion + ':' + (providerAnalysis.signalVersion || 0),
             byteData: byteData,
             sampleRate: providerAnalysis.sampleRate || (context && context.sampleRate) || 44100,
@@ -859,6 +872,7 @@ var AudioAnalysis = (function() {
         try {
             entry.analyser.getByteTimeDomainData(entry.timeData);
             entry.analyser.getByteFrequencyData(entry.freqData);
+            readDecibels(entry);
         } catch (err) {
             return fallbackAnalysis(options, 'Audio file analyser failed; audio fallback is active.');
         }
@@ -880,6 +894,7 @@ var AudioAnalysis = (function() {
             sampleRate: context && context.sampleRate || 44100,
             fftSize: entry.analyser.fftSize || DEFAULT_FFT_SIZE,
             fftScale: 'normalized-db', fftMinDecibels: entry.analyser.minDecibels, fftMaxDecibels: entry.analyser.maxDecibels,
+            spectrumDb: entry.freqDbOk ? entry.freqDb : null,
             time: fields.currentTime,
             level: metrics.level,
             bass: metrics.bass,
@@ -895,6 +910,7 @@ var AudioAnalysis = (function() {
         try {
             entry.analyser.getByteTimeDomainData(entry.timeData);
             entry.analyser.getByteFrequencyData(entry.freqData);
+            readDecibels(entry);
         } catch (err) {
             return fallbackAnalysis(options, 'Capture Playback analyser failed; audio fallback is active.');
         }
@@ -913,6 +929,7 @@ var AudioAnalysis = (function() {
             sampleRate: context && context.sampleRate || 44100,
             fftSize: entry.analyser.fftSize || DEFAULT_FFT_SIZE,
             fftScale: 'normalized-db', fftMinDecibels: entry.analyser.minDecibels, fftMaxDecibels: entry.analyser.maxDecibels,
+            spectrumDb: entry.freqDbOk ? entry.freqDb : null,
             time: currentTime(options),
             level: metrics.level,
             bass: metrics.bass,

@@ -47,7 +47,7 @@ Category: **Light Show**. ID: `strobe`.
 | Random Seed · `strobe_random_seed` | 13 | 0 to 999 | 1 |
 | Edge Softness · `strobe_softness` | 0.04 | 0 to 0.45 | 0.01 |
 | Phase · `strobe_phase` | 0 | 0 to 1 | 0.01 |
-| Fire On · `strobe_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Fire On · `strobe_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Every Nth Hit · `strobe_every` | 1 | 1 to 8 | 1 |
 
 ## Lasers
@@ -70,7 +70,7 @@ Category: **Light Show**. ID: `lasers`.
 | Beam Length · `laser_length` | 1 | 0.1 to 1.5 | 0.01 |
 | Fan Spread · `laser_spread` | 1 | 0.05 to 1 | 0.01 |
 | Flicker · `laser_flicker` | 0 | 0 to 1 | 0.01 |
-| Flash On · `laser_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Flash On · `laser_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Blend · `laser_blend` | Additive Glow (0) | Additive Glow; Normal | 1 |
 
 ## Stage Lights
@@ -92,7 +92,7 @@ Category: **Light Show**. ID: `spotlights`.
 | Colour 1 · `spot_color` | #ffffff | color | — |
 | Colour 2 · `spot_color2` | #ff4fb0 | color | — |
 | Haze · `spot_haze` | 0.6 | 0 to 1 | 0.01 |
-| Flash On · `spot_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Flash On · `spot_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 
 ## Lightning
 
@@ -102,7 +102,7 @@ Category: **Light Show**. ID: `lightning`.
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Fire On · `bolt_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Fire On · `bolt_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Strikes / sec (free) · `bolt_rate` | 1.5 | 0.2 to 8 | 0.1 |
 | Bolts per Strike · `bolt_count` | 2 | 1 to 6 | 1 |
 | Branches · `bolt_branches` | 0.4 | 0 to 1 | 0.01 |
@@ -122,7 +122,7 @@ Category: **Light Show**. ID: `fireworks`.
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Fire On · `fw_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Fire On · `fw_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Bursts / sec (free) · `fw_rate` | 0.8 | 0.1 to 4 | 0.05 |
 | Burst Style · `fw_style` | Mixed (5) | Peony; Ring; Willow; Palm; Heart; Mixed | 1 |
 | Sparks per Burst · `fw_count` | 120 | 20 to 300 | 5 |
@@ -147,7 +147,7 @@ Category: **Light Show**. ID: `laser_room`.
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
 | Style · `lr_style` | Tunnel Rings (0) | Tunnel Rings; Fan Sheets; Crossing Beams; Laser Grid | 1 |
-| Flash On · `lr_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Flash On · `lr_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Speed · `lr_speed` | 1 | 0 to 3 | 0.01 |
 | Beams / Rings · `lr_count` | 10 | 2 to 24 | 1 |
 | Spread · `lr_spread` | 0.6 | 0 to 1 | 0.01 |
@@ -194,7 +194,7 @@ Category: **Shapes**. ID: `rings`.
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Fire On · `ring_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Fire On · `ring_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Interval (free) · `ring_interval` | 0.6 | 0.1 to 4 | 0.05 |
 | Expand Speed · `ring_speed` | 0.5 | 0.05 to 2 | 0.01 |
 | Life (sec) · `ring_life` | 1.6 | 0.2 to 4 | 0.05 |
@@ -242,7 +242,7 @@ Category: **Shapes**. ID: `hexgrid`.
 | Line Width · `hx_line` | 1.4 | 0.5 to 6 | 0.1 |
 | Glow · `hx_glow` | 12 | 0 to 40 | 1 |
 | Grid Brightness · `hx_base` | 0.3 | 0 to 1 | 0.01 |
-| Pulse On · `hx_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Pulse On · `hx_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Pulse Every (free, sec) · `hx_interval` | 1.2 | 0.2 to 4 | 0.05 |
 | Pulse Speed · `hx_pulse_speed` | 1 | 0.2 to 3 | 0.05 |
 | Random Cells · `hx_flicker` | 0.3 | 0 to 1 | 0.01 |
@@ -330,7 +330,7 @@ Category: **Atmosphere**. ID: `bokeh`.
 | Motion · `bk_motion` | Rise (0) | Rise; Drift; Fall; Swirl | 1 |
 | Speed · `bk_speed` | 0.4 | 0 to 3 | 0.01 |
 | Twinkle · `bk_twinkle` | 0.35 | 0 to 1 | 0.01 |
-| Flare On · `bk_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Flare On · `bk_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Colour · `bk_color_mode` | Warm Lights (0) | Warm Lights; Rainbow; Solid Colour; Two-Tone | 1 |
 | Colour 1 · `bk_color` | #ffb347 | color | — |
 | Colour 2 · `bk_color2` | #ff6fb5 | color | — |
@@ -350,7 +350,7 @@ Category: **Atmosphere**. ID: `matrix`.
 | Density · `mx_density` | 0.7 | 0.05 to 1 | 0.01 |
 | Trail Length · `mx_trail` | 18 | 4 to 40 | 1 |
 | Glyph Flicker · `mx_flicker` | 1 | 0 to 3 | 0.01 |
-| New Wave On · `mx_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| New Wave On · `mx_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Head Glow · `mx_glow` | 10 | 0 to 30 | 1 |
 | Darken Behind · `mx_dim` | 0 | 0 to 0.9 | 0.01 |
 | Colour · `mx_color_mode` | Solid Colour (1) | Rainbow Cycle; Solid Colour; Two-Tone | 1 |
@@ -398,7 +398,7 @@ Category: **Atmosphere**. ID: `cinematic`.
 | Bar Opacity · `cn_bar_opacity` | 1 | 0 to 1 | 0.01 |
 | Bars Slide In (sec) · `cn_bar_slide` | 1.5 | 0 to 5 | 0.1 |
 | Film Burn · `cn_burn` | 0.5 | 0 to 1 | 0.01 |
-| Burn On · `cn_burn_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops | 1 |
+| Burn On · `cn_burn_sync` | Free Run (0) | Free Run; Kick; Snare; Hi-hat; Beat; Bar; Drops (Studio) | 1 |
 | Burn Every (free, sec) · `cn_burn_every` | 9 | 2 to 30 | 0.5 |
 | Burn Colour · `cn_burn_color` | #ff7a2a | color | — |
 | Dip to Black On · `cn_dip` | Never (0) | Never; Every Bar; Every 4 Bars; Drops | 1 |

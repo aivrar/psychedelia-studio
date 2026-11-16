@@ -109,9 +109,11 @@ var AudioReactor = (function() {
     function isSource(id) { return typeof id === 'string' && !!VALID_SOURCES[id]; }
 
     // ------------------------------------------------------------ Analysis
+    // Linear magnitudes may exceed 1 (unclipped loud bass); only byte data is bounded.
     function sample(arr, i, byteData) {
         var v = Number(arr[i]);
-        return isFinite(v) ? clamp01(byteData ? v / 255 : v) : 0;
+        if (!isFinite(v) || v <= 0) return 0;
+        return byteData ? Math.min(1, v / 255) : v;
     }
 
     function rangeFor(analysis, hz) {
@@ -173,7 +175,10 @@ var AudioReactor = (function() {
         // Require a net rise and the appropriate frequency balance too.
         if (!eligible || !rising || flux <= thr || energyRise <= thr * 0.5 || now - d.last < d.minGap) return 0;
         d.last = now;
-        return clamp01(0.2 + (flux - thr) / Math.max(d.floor / settings.sensitivity, thr) * 0.3);
+        // Studio drum events arrive at about 0.9 (sqrt of velocity). The old
+        // 0.2 + 0.3 x excess gave detected hits 0.35-0.5, so the same style
+        // looked much tamer on a file or PC audio than on Studio Music.
+        return clamp01(0.45 + (flux - thr) / Math.max(d.floor / settings.sensitivity, thr) * 0.35);
     }
 
     function trigger(kind, strength, now, age) {
@@ -223,7 +228,29 @@ var AudioReactor = (function() {
 
     // Estimate external tempo over 40..240 BPM. The former 75..170 fold
     // doubled slow songs and halved fast ones.
+    // Soft phase lock: pull the beat clock toward each kick. The weight falls
+    // to zero half a beat away, so the odd off-beat kick barely moves it, but
+    // a clock that starts anywhere else converges within a few kicks. (The
+    // old rule only corrected within a quarter beat, so a clock that started
+    // 0.25-0.75 beats off stayed there and Beat pulse, bar and the waves hit
+    // between the kicks.) Manual tempo locks phase too; only BPM is fixed.
+    // Kicks in a row that all land the SAME distance from the beat mean the
+    // clock itself is off (near half a beat the soft weight alone would never
+    // move it). Syncopated kicks land at varying distances and do not count.
+    var farKicks = 0, farErr = 0;
+    function alignPhase() {
+        if (!(st.bpm > 0)) return;
+        var err = Math.round(lfoBeats) - lfoBeats;
+        var drift = err - farErr; drift -= Math.round(drift);
+        if (Math.abs(err) <= 0.3) farKicks = 0;
+        else farKicks = farKicks && Math.abs(drift) < 0.12 ? farKicks + 1 : 1;
+        farErr = err;
+        var w = Math.cos(Math.PI * err);
+        phaseCorrection = farKicks >= 3 ? err : err * 0.6 * w * w;
+    }
+
     function registerOnset(now) {
+        alignPhase();
         if (settings.tempoMode === 'manual') return;
         onsetTimes.push(now);
         if (onsetTimes.length > 24) onsetTimes.shift();
@@ -249,9 +276,6 @@ var AudioReactor = (function() {
         var totalVotes = Object.keys(votes).reduce(function(total, key) { return total + votes[key]; }, 0);
         st.tempoConfidence = clamp01(1.75 * bestVotes / Math.max(1, totalVotes) * Math.min(1, (onsetTimes.length - 3) / 8));
         st.bpm = st.bpm ? st.bpm + (best - st.bpm) * 0.25 : best;
-        var ph = lfoBeats - Math.floor(lfoBeats);
-        // Pull the clock toward nearby onsets without resetting beat/bar counts.
-        if (ph < 0.25 || ph > 0.75) phaseCorrection = Math.round(lfoBeats) - lfoBeats;
     }
 
     function pollStudio(now) {
@@ -297,7 +321,7 @@ var AudioReactor = (function() {
         Object.keys(bands).forEach(function(k) { bands[k] = band(); });
         Object.keys(env).forEach(function(k) { env[k] = 0; });
         det = newDetectors();
-        onsetTimes = []; phaseCorrection = 0; silentTime = 0; beatCounter = 0;
+        onsetTimes = []; phaseCorrection = 0; silentTime = 0; beatCounter = 0; farKicks = 0;
         lastStudioEvent = -10; signalKey = null; lastAnalysis = null;
         lastUpdateTime = null;
         if (resetClock !== false) lfoBeats = 0;
@@ -340,7 +364,7 @@ var AudioReactor = (function() {
         if (st.active && a.fft && a.waveform) {
             var bd = !!a.byteData;
             var fft = a.spectrum || a.fft, wave = a.waveform;
-            linearFft = AudioSignal.linear(a, linearFft);
+            linearFft = AudioSignal.unclipped(a, linearFft);
             fft = linearFft;
             var spectrumAnalysis = { fft: fft, sampleRate: a.sampleRate, fftSize: a.fftSize };
             var rms = AudioSignal.rms(wave, bd) * 1.4;
@@ -701,6 +725,12 @@ var AudioReactor = (function() {
         getTriggerTypes: function() { return TRIGGER_TYPES.slice(); },
         getClock: function() { return nowSec; },
         getBeatClock: function() { return lfoBeats; },
+        // Tap Tempo: the tap is a beat, so put the clock on it now. A forward
+        // jump fires that beat on the next frame; the beat index stays monotonic.
+        tapBeat: function() {
+            lfoBeats = Math.round(lfoBeats); phaseCorrection = 0; farKicks = 0;
+            st.beats = lfoBeats; st.phase = 0;
+        },
         isLive: function() { return live > 0.5; },
         getLinks: function() { syncEffectLinks(); return links.map(copy); },
         setLink: setLink,

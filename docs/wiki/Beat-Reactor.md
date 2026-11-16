@@ -24,9 +24,9 @@ Turning off global reactions, or choosing **Off** for Global Style, does not rem
 | --- | --- | --- |
 | Zoom Punch | Image scale on kick hits | 35% |
 | Rotation Kick | Alternating image twist on kicks | 0% |
-| Time Surge | Smooth animation acceleration from bass/beats | 30% |
+| Time Surge | Smooth animation acceleration from bass and kicks | 30% |
 | Flash | Image brightness on hits/drops | 25% |
-| Hue Shift | Color rotation with beats and sections | 0% |
+| Hue Shift | Color rotation with kicks and sections | 0% |
 | RGB Split | Channel separation on percussion | 20% |
 | Colour Pump | Saturation/glow emphasis with bass | 25% |
 | Shake | Camera/image shake on hits | 0% |
@@ -70,7 +70,7 @@ These are starting recipes, not additional built-in presets.
 | Wave / bar | One cycle per four beats |
 | Slow wave / 4 bars | One cycle per sixteen beats |
 
-Studio beat timing is exact from the sequencer. External tempo can be estimated, locked between **40–240 BPM**, or set with Tap. The tempo waves continue at Studio BPM when no audio is playing. A moving LFO during silence is expected.
+Studio beat timing is exact from the sequencer. External tempo can be estimated, locked between **40–240 BPM**, or set with Tap. With a file or PC audio, the beat clock lines itself up with the detected kicks in every tempo mode, so Beat pulse, Bar and the waves land on the beat within a few kicks; each Tap also marks a beat. Bars are counted in fours from where the clock started, not from a detected downbeat. The tempo waves continue at Studio BPM when no audio is playing. A moving LFO during silence is expected.
 
 ## Per-effect parameter links
 

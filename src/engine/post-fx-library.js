@@ -10,7 +10,8 @@ var PostFxLibrary = (function() {
     'use strict';
 
     var CATEGORIES = ['Distort', 'Feedback', 'Colour', 'Stylize', 'Glow & Blur', 'Lens & Retro'];
-    var SYNC_OPTIONS = ['Free Run', 'Kick', 'Snare', 'Beat', 'Bar', 'Drops'];
+    // Saved setups store the index, so new choices go on the end.
+    var SYNC_OPTIONS = ['Free Run', 'Kick', 'Snare', 'Beat', 'Bar', 'Drops (Studio)', 'Hi-hat'];
 
     var HUE = 'vec3 hueRot(vec3 c, float a) {\n' +
         '    vec3 k = vec3(0.57735);\n' +
@@ -1455,7 +1456,7 @@ var PostFxLibrary = (function() {
 
     return {
         categories: CATEGORIES,
-        syncTypes: ['free', 'kick', 'snare', 'beat', 'bar', 'drop'],
+        syncTypes: ['free', 'kick', 'snare', 'beat', 'bar', 'drop', 'hat'],
         list: function() { return FX; }
     };
 })();

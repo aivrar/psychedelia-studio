@@ -14,6 +14,21 @@ var AudioSignal = (function() {
         }
         return buffer;
     }
+    // Linear magnitudes on the same scale as linear() (1 = -30 dB, the byte
+    // ceiling) but from unclipped decibels when the source provides them, so
+    // loud bass can exceed 1 instead of flattening at the ceiling.
+    function unclipped(analysis, buffer) {
+        var db = analysis.spectrumDb, fft = analysis.spectrum || analysis.fft || [];
+        if (!db || db.length !== fft.length) return linear(analysis, buffer);
+        if (!buffer || buffer.length !== db.length) buffer = new Float32Array(db.length);
+        var floor = Number(analysis.fftMinDecibels);
+        if (!isFinite(floor)) floor = -100;
+        for (var i = 0; i < db.length; i++) {
+            var d = Number(db[i]);
+            buffer[i] = d > floor && d < 60 ? Math.pow(10, (d + 30) / 20) : 0;
+        }
+        return buffer;
+    }
     function rms(wave, byte) {
         var power = 0;
         for (var i = 0; i < wave.length; i++) {
@@ -42,5 +57,5 @@ var AudioSignal = (function() {
             bass: mean(fft, range(analysis, bands.bass)), mid: mean(fft, range(analysis, bands.mid)),
             treble: mean(fft, range(analysis, bands.high)) };
     }
-    return { bands: bands, linear: linear, rms: rms, range: range, mean: mean, measure: measure };
+    return { bands: bands, linear: linear, unclipped: unclipped, rms: rms, range: range, mean: mean, measure: measure };
 })();

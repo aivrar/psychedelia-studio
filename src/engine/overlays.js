@@ -13,7 +13,7 @@ var Overlays = (function() {
     'use strict';
 
     var CATEGORIES = ['Light Show', 'Shapes', 'Atmosphere', 'Audio & Text'];
-    var SYNC_LABELS = ['Free Run', 'Kick', 'Snare', 'Hi-hat', 'Beat', 'Bar', 'Drops'];
+    var SYNC_LABELS = ['Free Run', 'Kick', 'Snare', 'Hi-hat', 'Beat', 'Bar', 'Drops (Studio)'];
     var SYNC_TYPES = ['free', 'kick', 'snare', 'hat', 'beat', 'bar', 'drop'];
     var COLOR_MODES = ['Rainbow Cycle', 'Solid Colour', 'Two-Tone'];
 

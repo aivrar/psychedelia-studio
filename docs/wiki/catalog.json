@@ -27192,10 +27192,11 @@
             "Snare",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)",
+            "Hi-hat"
           ],
           "min": 0,
-          "max": 5,
+          "max": 6,
           "default": 1,
           "step": 1
         },
@@ -27645,10 +27646,11 @@
             "Snare",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)",
+            "Hi-hat"
           ],
           "min": 0,
-          "max": 5,
+          "max": 6,
           "default": 4,
           "step": 1
         },
@@ -29483,7 +29485,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -29658,7 +29660,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -29820,7 +29822,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -29853,7 +29855,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -29990,7 +29992,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -30192,7 +30194,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -30541,7 +30543,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -30879,7 +30881,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -31506,7 +31508,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -31647,7 +31649,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,
@@ -31913,7 +31915,7 @@
             "Hi-hat",
             "Beat",
             "Bar",
-            "Drops"
+            "Drops (Studio)"
           ],
           "min": 0,
           "max": 6,

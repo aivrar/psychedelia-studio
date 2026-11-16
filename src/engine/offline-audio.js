@@ -5,14 +5,16 @@ var OfflineAudio = (function() {
     for (var w = 0; w < N; w++) window[w] = 0.42 - 0.5 * Math.cos(2 * Math.PI * w / N) + 0.08 * Math.cos(4 * Math.PI * w / N);
     function analyser(buffer, source, events, bpm) {
         var l = buffer.getChannelData(0), r = buffer.getChannelData(Math.min(1, buffer.numberOfChannels - 1));
-        var re = new Float64Array(N), im = new Float64Array(N), wave = new Float32Array(512), fft = new Float32Array(512);
+        var re = new Float64Array(N), im = new Float64Array(N), wave = new Float32Array(512), fft = new Float32Array(512), db = new Float32Array(512);
         var index = 0, time = 0, section = '', lastFrame = -1;
-        function sample(i) { var value = i >= 0 && i < l.length ? (l[i] + r[i]) * 0.5 : 0; return isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0; }
+        // The live analysers see unclipped samples, so the FFT does too; only the waveform is clamped.
+        function raw(i) { var value = i >= 0 && i < l.length ? (l[i] + r[i]) * 0.5 : 0; return isFinite(value) ? value : 0; }
+        function sample(i) { return Math.max(-1, Math.min(1, raw(i))); }
         function update(frame, fps) {
             if (lastFrame === frame) return;
             lastFrame = frame; time = (frame + 1) / fps;
             var end = Math.round(time * buffer.sampleRate);
-            for (var i = 0; i < N; i++) { re[i] = sample(end - N + i) * window[i]; im[i] = 0; if (i >= N - 512) wave[i - N + 512] = sample(end - N + i) * 0.5 + 0.5; }
+            for (var i = 0; i < N; i++) { re[i] = raw(end - N + i) * window[i]; im[i] = 0; if (i >= N - 512) wave[i - N + 512] = sample(end - N + i) * 0.5 + 0.5; }
             // Iterative radix-2 FFT, normalized like the Web Audio analyser.
             for (var a = 1, b = 0; a < N; a++) {
                 var bit = N >> 1; for (; b & bit; bit >>= 1) b ^= bit; b ^= bit;
@@ -33,13 +35,15 @@ var OfflineAudio = (function() {
             for (var bin = 0; bin < 512; bin++) {
                 var amplitude = Math.hypot(re[bin], im[bin]) / N * Math.pow(10, 30 / 20);
                 fft[bin] = amplitude > 0 ? Math.max(0, Math.min(1, 1 + 20 / 70 * Math.log10(amplitude))) : 0;
+                // Unclipped decibels for the Beat Reactor, as the live analysers give it.
+                db[bin] = amplitude > 0 ? 20 * Math.log10(amplitude) - 30 : -Infinity;
             }
         }
         return {
             analysis: function(frame, fps) {
                 update(frame, fps);
                 return { available: true, active: true, source: source, byteData: false, fftScale: 'normalized-db', fftMinDecibels: -100, fftMaxDecibels: -30,
-                    waveform: wave, fft: fft, spectrum: fft, sampleRate: buffer.sampleRate, fftSize: N, signalVersion: 'offline', time: time };
+                    waveform: wave, fft: fft, spectrum: fft, spectrumDb: db, sampleRate: buffer.sampleRate, fftSize: N, signalVersion: 'offline', time: time };
             },
             music: source === 'studio' ? {
                 isPlaying: function() { return true; },

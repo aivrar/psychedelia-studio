@@ -12,9 +12,9 @@ var MusicControls = (function() {
     var REACTIONS = [
         { key: 'zoom', label: 'Zoom Punch', title: 'Zooms in on every kick' },
         { key: 'rotate', label: 'Rotation Kick', title: 'Twists the image left and right on kicks' },
-        { key: 'speed', label: 'Time Surge', title: 'Speeds the animation up with the bass and on beats' },
+        { key: 'speed', label: 'Time Surge', title: 'Speeds the animation up with the bass and on kicks' },
         { key: 'flash', label: 'Flash', title: 'Brightness flash on kicks, snares and drops' },
-        { key: 'hue', label: 'Hue Shift', title: 'Steps the colours around the wheel on beats and new sections' },
+        { key: 'hue', label: 'Hue Shift', title: 'Steps the colours around the wheel on kicks and new sections' },
         { key: 'chroma', label: 'RGB Split', title: 'Chromatic split on snares, hats and percussion' },
         { key: 'pump', label: 'Colour Pump', title: 'Saturation and glow pumping with the bass' },
         { key: 'shake', label: 'Shake', title: 'Camera shake on hits' }
@@ -467,6 +467,7 @@ var MusicControls = (function() {
                 AudioReactor.set('manualBpm', Math.round(60000 / gaps[Math.floor(gaps.length / 2)]));
                 AudioReactor.set('tempoMode', 'manual'); syncReactor();
             }
+            if (AudioReactor.tapBeat) AudioReactor.tapBeat();
             this.textContent = taps.length < 3 ? 'Tap ' + taps.length : 'Tap';
         });
         el('reactorPreset').addEventListener('change', function() {

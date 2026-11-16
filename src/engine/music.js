@@ -78,6 +78,7 @@ var Music = (function createMusicEngine(offlineContext) {
     var recordDest = null;
     var waveBuf = new Float32Array(512);
     var fftBuf = new Float32Array(512);
+    var dbBuf = new Float32Array(512);
     var degreeCache = {};
     function transport() { return offlineContext ? offlineContext.transport : Tone.Transport; }
     function audioContext() { return offlineContext || Tone.getContext(); }
@@ -793,8 +794,10 @@ var Music = (function createMusicEngine(offlineContext) {
                 var db = f[i] !== undefined ? Number(f[i]) : -100;
                 // Match the file/capture analyser's -100..-30 dB byte range.
                 fftBuf[i] = Math.max(0, Math.min(1, (db + 100) / 70));
+                // Unclipped, for the Beat Reactor (see AudioAnalysis readDecibels).
+                dbBuf[i] = isFinite(db) ? db : -Infinity;
             }
-            return { available: true, playing: playing, waveform: waveBuf, fft: fftBuf,
+            return { available: true, playing: playing, waveform: waveBuf, fft: fftBuf, spectrumDb: dbBuf,
                 byteData: false, fftSize: 1024, sampleRate: Tone.getContext().rawContext.sampleRate,
                 fftScale: 'normalized-db', fftMinDecibels: -100, fftMaxDecibels: -30 };
         } catch (err) {

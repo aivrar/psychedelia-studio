@@ -124,7 +124,7 @@ Category: **Distort**. ID: `shockwave`.
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Fire On · `sync` | Kick (1) | Free Run; Kick; Snare; Beat; Bar; Drops | 1 |
+| Fire On · `sync` | Kick (1) | Free Run; Kick; Snare; Beat; Bar; Drops (Studio); Hi-hat | 1 |
 | Interval (sec) · `interval` | 1 | 0.2 to 4 | 0.05 |
 | Strength · `strength` | 0.06 | 0 to 0.15 | 0.001 |
 | Ring Width · `width` | 0.06 | 0.01 to 0.3 | 0.005 |
@@ -230,7 +230,7 @@ Category: **Feedback**. ID: `datamosh`.
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Refresh On · `sync` | Bar (4) | Free Run; Kick; Snare; Beat; Bar; Drops | 1 |
+| Refresh On · `sync` | Bar (4) | Free Run; Kick; Snare; Beat; Bar; Drops (Studio); Hi-hat | 1 |
 | Refresh Every (free, sec) · `interval` | 2 | 0.3 to 8 | 0.05 |
 | Smear · `smear` | 1 | 0 to 3 | 0.01 |
 | Block Size · `block` | 16 | 4 to 64 | 1 |
