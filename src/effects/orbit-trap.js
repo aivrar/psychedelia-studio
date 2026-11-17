@@ -49,6 +49,9 @@ vec3 trapPalette(float t) {
     if (u_palette_type > 4.5) return psyLut(t);
     if (u_palette_type < 0.5) return rainbow(t);
     if (u_palette_type < 1.5) return neon(t);
+    // These cosine palettes do not end on the colour they start with, so
+    // they run there and back; otherwise every hue wrap shows a hard edge.
+    t = 1.0 - abs(1.0 - 2.0 * t);
     if (u_palette_type < 2.5) return palette(t, vec3(0.34,0.18,0.06), vec3(0.62,0.38,0.16), vec3(1.0,0.70,0.28), vec3(0.04,0.18,0.38));
     if (u_palette_type < 3.5) return palette(t, vec3(0.05,0.14,0.32), vec3(0.30,0.46,0.78), vec3(0.95,0.38,0.72), vec3(0.10,0.36,0.58));
     return palette(t, vec3(0.08,0.24,0.10), vec3(0.42,0.76,0.28), vec3(0.82,1.0,0.36), vec3(0.52,0.08,0.20));
@@ -142,8 +145,9 @@ vec3 renderOrbitTrapView(vec2 screenUv, vec2 trapFollow, float dive, float t) {
         float trapGlow = exp(-minTrap * 5.0);
         if (u_zoom_mode < 0.5) {
             float screenAngle = atan(screenUv.y, screenUv.x);
-            float screenDetail = length(screenUv) * 0.35 + screenAngle * 0.071;
-            float orbitHue = fract(length(trapZ) * 0.18 + atan(trapZ.y, trapZ.x) * 0.15915 + screenDetail + t * u_color_speed * 0.04);
+            // Angle enters as a whole hue turn, so there is no seam where atan wraps.
+            float screenDetail = length(screenUv) * 0.35 + screenAngle * 0.15915494;
+            float orbitHue = fract(length(trapZ) * 0.18 + atan(trapZ.y, trapZ.x) * 0.15915494 + screenDetail + t * u_color_speed * 0.04);
             float orbitShade = 0.72 + 0.28 * sin(dot(screenUv, vec2(9.0, -6.0)) + length(trapZ) * 2.0 + t * 0.7);
             vec3 orbitCol = trapPalette(orbitHue) * 0.75;
             orbitCol *= orbitShade;
@@ -154,7 +158,7 @@ vec3 renderOrbitTrapView(vec2 screenUv, vec2 trapFollow, float dive, float t) {
     } else {
         // Outside - blend trap and escape coloring
         float td = exp(-minTrap * 3.0);
-        float hue = fract(atan(trapZ.y, trapZ.x) / 6.28318 + minTrap * 2.0 + t * u_color_speed * 0.05);
+        float hue = fract(atan(trapZ.y, trapZ.x) * 0.15915494 + minTrap * 2.0 + t * u_color_speed * 0.05);
         col = hsv2rgb(vec3(hue, 0.7 + 0.3 * td, td));
 
         // Add escape time coloring
