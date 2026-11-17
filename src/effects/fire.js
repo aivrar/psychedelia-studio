@@ -20,13 +20,21 @@ uniform float u_detail;
 uniform float u_wind;
 uniform float u_palette_mode;
 
+// Heat ramp: black -> a (embers) -> b (flame) -> c (hot core). Piecewise so
+// the middle stays a saturated flame colour instead of going brown.
+vec3 heatRamp(float t, vec3 a, vec3 b, vec3 c) {
+    if (t < 0.35) return a * smoothstep(0.0, 0.35, t);
+    if (t < 0.7) return mix(a, b, (t - 0.35) / 0.35);
+    return mix(b, c, (t - 0.7) / 0.3);
+}
+
 vec3 fireColor(float t, int mode) {
     t = clamp(t, 0.0, 1.0);
-    if (mode == 0) return mix(vec3(0.0), mix(vec3(0.8, 0.1, 0.0), mix(vec3(1.0, 0.6, 0.0), vec3(1.0, 1.0, 0.6), t), t), t);
-    if (mode == 1) return mix(vec3(0.0), mix(vec3(0.0, 0.1, 0.8), mix(vec3(0.0, 0.5, 1.0), vec3(0.7, 0.9, 1.0), t), t), t);
-    if (mode == 2) return mix(vec3(0.0), mix(vec3(0.0, 0.5, 0.0), mix(vec3(0.2, 0.9, 0.1), vec3(0.8, 1.0, 0.5), t), t), t);
-    if (mode == 3) return mix(vec3(0.0), mix(vec3(0.3, 0.0, 0.5), mix(vec3(0.7, 0.2, 1.0), vec3(1.0, 0.7, 1.0), t), t), t);
-    return rainbow(t);
+    if (mode == 0) return heatRamp(t, vec3(0.75, 0.08, 0.0), vec3(1.0, 0.5, 0.02), vec3(1.0, 0.92, 0.55));
+    if (mode == 1) return heatRamp(t, vec3(0.02, 0.12, 0.75), vec3(0.05, 0.55, 1.0), vec3(0.75, 0.92, 1.0));
+    if (mode == 2) return heatRamp(t, vec3(0.05, 0.45, 0.0), vec3(0.3, 0.9, 0.1), vec3(0.85, 1.0, 0.5));
+    if (mode == 3) return heatRamp(t, vec3(0.35, 0.0, 0.55), vec3(0.75, 0.2, 1.0), vec3(1.0, 0.75, 1.0));
+    return rainbow(t) * smoothstep(0.0, 0.35, t);
 }
 
 void main() {
@@ -35,7 +43,8 @@ void main() {
     float t = u_time * u_speed + seedPhase();
 
     // Fire noise
-    vec2 p = noiseUV * vec2(3.0, 4.0);
+    // Stretched vertically so the noise forms rising tongues, not blobs.
+    vec2 p = noiseUV * vec2(4.5, 1.7);
     p.x += u_wind * sin(uv.y * 3.0 + t);
     p.y -= t * 0.5;
 
@@ -49,12 +58,14 @@ void main() {
         amp *= 0.5;
     }
 
-    // Shape fire - hotter at bottom
-    float shape = 1.0 - uv.y;
-    shape = pow(shape, 1.5);
-
-    float fire = shape * u_intensity + noise * 0.5 * shape;
+    // Flame tongues: heat falls off with height and the noise decides how
+    // far each tongue reaches, so the top breaks into separate licks and
+    // the base flickers instead of being one flat hot band.
+    float n01 = clamp(noise * 0.5 + 0.5, 0.0, 1.0);
+    float base = 1.0 - uv.y;
+    float fire = n01 * u_intensity * 0.75 + 0.35 * base * base * base + 0.02 - uv.y * 1.05;
     fire = clamp(fire, 0.0, 1.0);
+    fire = fire * fire * (3.0 - 2.0 * fire);
 
     vec3 col = fireColor(fire, int(u_palette_mode));
     col += vec3(0.02, 0.01, 0.0) * (1.0 - uv.y); // Ambient glow

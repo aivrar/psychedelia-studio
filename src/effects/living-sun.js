@@ -95,7 +95,11 @@ void main() {
     // Corona and flares
     float dr = max(r - R, 0.0) / R;
     float ang = atan(uv.y, uv.x);
-    float streak = vn3(vec3(ang * 7.0, dr * 2.0 - t * 0.25, t * 0.05)) * 0.6 + vn3(vec3(ang * 19.0, dr * 4.0 - t * 0.4, 3.0)) * 0.4;
+    // Noise sampled on a circle (radius = old angular frequency), so the
+    // streaks join up where atan wraps instead of showing a seam.
+    vec2 ring = vec2(cos(ang), sin(ang));
+    float streak = vn3(vec3(ring * 7.0 + vec2(t * 0.05, 0.0), dr * 2.0 - t * 0.25)) * 0.6
+                 + vn3(vec3(ring * 19.0 + vec2(0.0, 3.0), dr * 4.0 - t * 0.4)) * 0.4;
     float coronaFall = exp(-dr * mix(10.0, 3.5, clamp(u_corona * 0.5 + kick * 0.3, 0.0, 1.0)));
     float corona = coronaFall * (0.55 + u_rays * (streak - 0.4) * 1.4) * u_corona * (1.0 + kick * 1.5);
     col += starColor(0.85) * max(corona, 0.0) * (r > R ? 1.0 : 0.25);

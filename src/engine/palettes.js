@@ -1,5 +1,10 @@
 /* Psychedelia Studio - Shared Palette Library
  *
+ * Licence: MIT (see LICENSE). The Viridis, Magma, Inferno, Plasma, Turbo,
+ * Twilight and Cubehelix stops follow those published colour maps, and the
+ * OKLab blend follows Björn Ottosson; sources and their licences are listed
+ * in THIRD_PARTY_NOTICES.md.
+ *
  * Gradient palettes shared by the fractal and flight effects. Each palette
  * is a list of colour stops; it is baked into a 256x1 lookup texture that
  * shaders sample with psyLut(t). Stops are blended in OKLab so gradients stay

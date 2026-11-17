@@ -216,7 +216,7 @@ Effect ID: `tricorn`. CPU fallback declared: **no**. A declared fallback is a re
 | Zoom Mode · `zoom_mode` | Infinite Dive (0) | Infinite Dive; Classic One-Way | — |
 | Loop Depth · `zoom_depth` | 9 | 6 to 24 | 1 |
 | Iterations · `max_iter` | 200 | 50 to 500 | 10 |
-| Target X · `target_x` | -0.4 | -2 to 2 | 0.01 |
+| Target X · `target_x` | -1 | -2 to 2 | 0.01 |
 | Target Y · `target_y` | 0 | -2 to 2 | 0.01 |
 | Color Speed · `color_speed` | 0.4 | 0 to 8 | 0.05 |
 | Power · `power` | 2 | 2 to 8 | 0.5 |
@@ -4624,7 +4624,7 @@ Effect ID: `kleinian`. CPU fallback declared: **no**. A declared fallback is a r
 
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
-| Iterations · `max_iter` | 100 | 20 to 300 | 10 |
+| Iterations · `max_iter` | 30 | 20 to 300 | 10 |
 | Zoom · `zoom` | 1 | 0.3 to 5 | 0.1 |
 | Parameter A · `param_a` | 1.96 | 1.5 to 2.5 | 0.01 |
 | Parameter B · `param_b` | 0.5 | 0 to 2 | 0.01 |

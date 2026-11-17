@@ -47,15 +47,21 @@ vec3 glowColor(float t) {
     return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
 }
 
+// Hue turns from the angle around the axis. Kept out of hueKey because
+// hueKey is scaled by Colour Spread; a non-whole number of turns per
+// revolution would show a seam where atan wraps.
+float g_hueTurn = 0.0;
+
 // Distance-like field for the active mode; hueKey picks the colour.
 float glowField(vec3 p, float t, float turb, float twist, out float hueKey) {
     float m = floor(u_mode + 0.5);
+    g_hueTurn = 0.0;
     if (m < 0.5) {
         // Vortex: a twisting spiral tube
         p.xy *= rot2(p.z * 0.35 * twist + t * 0.5);
         float ang = atan(p.y, p.x);
         float arms = sin(ang * 3.0 + p.z * 1.2 - t * 2.0) * (0.35 + 0.3 * turb);
-        hueKey = p.z * 0.06 + ang * 0.159;
+        hueKey = p.z * 0.06; g_hueTurn = ang * 0.159155;
         return abs(length(p.xy) - 1.3 - arms) * 0.45 + 0.01;
     } else if (m < 1.5) {
         // Cosmic Surf: a sheet folded by stacked sine turbulence
@@ -87,7 +93,8 @@ float glowField(vec3 p, float t, float turb, float twist, out float hueKey) {
             q += sin(q.zxy * f * 1.3 + t * 0.7) * (0.25 + 0.3 * turb) / f;
             f *= 1.9;
         }
-        hueKey = length(q) * 0.12 + atan(q.y, q.x) * 0.08;
+        // One hue turn per revolution (g_hueTurn), so no seam where atan wraps.
+        hueKey = length(q) * 0.12; g_hueTurn = atan(q.y, q.x) * 0.159155;
         return abs(length(q) - 1.6) * 0.35 + 0.01;
     }
     // Accretion Ring: a swirling disk of light
@@ -95,7 +102,7 @@ float glowField(vec3 p, float t, float turb, float twist, out float hueKey) {
     float a = atan(p.z, p.x);
     float swirl = sin(a * 2.0 - r * 1.5 + t * 1.5) * (0.15 + 0.25 * turb);
     float swirl2 = sin(a * 3.0 + r * 2.0 - t * 2.1) * (0.2 + 0.3 * turb);
-    hueKey = r * 0.12 - a * 0.159;
+    hueKey = r * 0.12; g_hueTurn = -a * 0.159155;
     float d1 = length(vec2(r - 2.0 - swirl, p.y * 2.5));
     float d2 = length(vec2(r - 3.2 - swirl2, p.y * 3.5 + sin(a * 4.0 + t) * 0.2));
     float d3 = length(vec2(r - 1.15, p.y * 1.4));
@@ -139,7 +146,7 @@ void main() {
         float hk;
         float d = glowField(p, t, turb, twist, hk);
         z += d;
-        col += glowColor(hk * u_spread + u_hue + t * 0.05) / d;
+        col += glowColor(hk * u_spread + g_hueTurn + u_hue + t * 0.05) / d;
         if (z > 40.0) break;
     }
     // Per-mode exposure so every mode lands at a similar brightness.

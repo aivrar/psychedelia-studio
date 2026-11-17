@@ -45,7 +45,8 @@ void main() {
     // Zoom animation
     val = sin(val * 3.14159 + r * u_zoom * 5.0 - t) * 0.5 + 0.5;
 
-    float hue = fract(val * 0.3 + a / 6.28318 * 0.3 + t * 0.03);
+    // One whole hue turn per revolution, so no seam where atan wraps.
+    float hue = fract(val * 0.3 + a / 6.28318 + t * 0.03);
     float sat = 0.7 + 0.3 * val;
     float bri = 0.3 + 0.7 * val;
 

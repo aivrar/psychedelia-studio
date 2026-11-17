@@ -110,7 +110,7 @@ var AudioReactor = (function() {
 
     function copy(o) { var r = {}; for (var k in o) r[k] = o[k]; return r; }
     function clamp01(v) { return v > 1 ? 1 : (v < 0 || !(v === v) ? 0 : v); }
-    function band() { return { raw: 0, floor: 0, peak: 0.1, value: 0 }; }
+    function band() { return { raw: 0, floor: 0, peak: 0.1, ref: 0, value: 0 }; }
     function detector(minGap, floor) { return { hist: [], elapsed: 0, last: -10, prev: 0, energy: 0, minGap: minGap, floor: floor }; }
     function newDetectors() { return { kick: detector(0.13, 0.004), snare: detector(0.1, 0.002), hat: detector(0.055, 0.001) }; }
     function isSource(id) { return typeof id === 'string' && !!VALID_SOURCES[id]; }
@@ -148,9 +148,17 @@ var AudioReactor = (function() {
         b.raw = raw;
         if (raw < b.floor) b.floor = raw;
         else b.floor += (raw - b.floor) * Math.min(1, dt * 0.08);
+        // Smallest range a band is stretched over: a share of this band's own
+        // recent level (ref, a slow peak), not a fixed amount, so a quiet
+        // source or a naturally weak band (mids, highs) gets the same 0..1
+        // swing as a loud one. The tiny absolute part keeps silence at rest.
+        if (raw > b.ref) b.ref = raw;
+        // ~7 s decay: a loud burst does not hold quiet material down for long.
+        else b.ref += (raw - b.ref) * Math.min(1, dt * 0.15);
+        var minSpan = Math.max(0.002, b.ref * 0.35);
         if (raw > b.peak) b.peak = raw;
-        else b.peak += (Math.max(raw, b.floor + 0.05) - b.peak) * Math.min(1, dt * 0.25);
-        var norm = clamp01((raw - b.floor) / Math.max(0.06, b.peak - b.floor));
+        else b.peak += (Math.max(raw, b.floor + minSpan) - b.peak) * Math.min(1, dt * 0.25);
+        var norm = clamp01((raw - b.floor) / Math.max(minSpan, b.peak - b.floor));
         // Preserve dynamics at high sensitivity instead of clipping to 1.
         norm = Math.pow(norm, 1 / Math.sqrt(settings.sensitivity));
         var k = 1 - Math.exp(-elapsed / (norm > b.value ? settings.attack : settings.release));

@@ -44,7 +44,9 @@ void main() {
     vec2 p = rot2(u_time * u_rotation) * uv;
     if (style > 1.5 && style < 2.5) {
         // Polar rosette: waves in log-polar space.
-        p = vec2(log(max(length(uv), 0.001)) * 0.5, atan(uv.y, uv.x) / 6.28318 * 2.0);
+        // abs() mirrors the angle so both sides of the atan wrap meet (a
+        // mirror line instead of a seam on the left).
+        p = vec2(log(max(length(uv), 0.001)) * 0.5, abs(atan(uv.y, uv.x)) / 3.14159265 * 2.0);
     }
     float n = floor(u_symmetry + 0.5);
     float v = 0.0;

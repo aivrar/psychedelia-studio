@@ -111,7 +111,9 @@ void main() {
                 float temp = clamp(pow(inner / hr, 0.9), 0.0, 1.0);
                 float ang = atan(hit.z, hit.x);
                 float rot = ang - t * u_disk_speed * 3.0 / pow(hr, 1.5);
-                float tex = 0.55 + 0.45 * snoise2(vec2(hr * 1.6, rot * 2.5)) + 0.25 * snoise2(vec2(hr * 4.0, rot * 6.0));
+                // Noise on a circle in the disk angle, so it joins up where atan wraps.
+                vec2 ring = vec2(cos(rot), sin(rot));
+                float tex = 0.55 + 0.45 * snoise(vec3(ring * 2.5, hr * 1.6)) + 0.25 * snoise(vec3(ring * 6.0, hr * 4.0));
                 tex *= 0.75 + 0.25 * sin(hr * 7.0 + tex * 3.0);
                 vec3 vd = normalize(vec3(-hit.z, 0.0, hit.x)) * sqrt(1.0 / hr);
                 float dop = pow(max(1.0 + dot(vd, -normalize(vel)) * 1.4 * u_doppler, 0.05), 3.0);

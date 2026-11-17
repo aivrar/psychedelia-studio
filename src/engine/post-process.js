@@ -432,10 +432,14 @@ var PostProcess = (function() {
         return true;
     }
 
-    function apply(time) {
+    // dt: seconds since the last rendered frame. Feedback passes scale their
+    // per-frame change by u_fstep (1 at 60 fps, 2 at 30 fps, 0.5 at 120 fps)
+    // so trails, echoes and scans run at the same speed at any frame rate.
+    function apply(time, dt) {
         if (!capturing) return;
         Renderer.setScreenRedirect(null);
         capturing = false;
+        var fstep = typeof dt === 'number' && isFinite(dt) && dt > 0 ? Math.max(0.25, Math.min(4, dt * 60)) : 1;
 
         var readTex = captureTex;
         var usePing = true;
@@ -480,6 +484,8 @@ var PostProcess = (function() {
             if (resLoc !== null) gl.uniform2f(resLoc, width, height);
             var timeLoc = uniformLocation(program, 'u_time');
             if (timeLoc !== null) gl.uniform1f(timeLoc, time);
+            var stepLoc = uniformLocation(program, 'u_fstep');
+            if (stepLoc !== null) gl.uniform1f(stepLoc, fstep);
             if (fx.trigger) {
                 var ageLoc = uniformLocation(program, 'u_age');
                 if (ageLoc !== null) gl.uniform1f(ageLoc, triggerAge(fx, time));

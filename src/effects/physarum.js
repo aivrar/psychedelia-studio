@@ -16,6 +16,8 @@
 
     var S = null;
     var warned = false;
+    var failedKey = '', failedGl = null;
+    var stepDebt = 0;   // simulation steps owed (fixed 60 Hz steps)
 
     var VS_QUAD = '#version 300 es\nin vec2 a_pos;\nout vec2 v_uv;\nvoid main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }';
 
@@ -163,6 +165,7 @@
         gl.bindFramebuffer(gl.FRAMEBUFFER, f);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
         var ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        if (!ok) gl.deleteFramebuffer(f);
         return ok ? f : null;
     }
 
@@ -221,7 +224,12 @@
         var th = Math.max(64, Math.round(gl.canvas.height * scale));
         var shape = Math.round(v.start || 0);
         if (S && S.gl === gl && S.size === size && S.tw === tw && S.th === th && S.shape === shape && gl.isTexture(S.agents0)) return true;
+        // A setup that already failed on this device is not retried every
+        // frame (each attempt allocates textures and buffers).
+        var key = size + 'x' + tw + 'x' + th;
+        if (failedKey === key && failedGl === gl) return false;
         destroy(gl);
+        failedKey = key; failedGl = gl;
         S = { gl: gl, size: size, tw: tw, th: th, shape: shape, flip: 0, tflip: 0 };
         S.pAgent = program(gl, VS_QUAD, FS_AGENT);
         S.pDeposit = program(gl, VS_DEPOSIT, FS_DEPOSIT);
@@ -244,6 +252,7 @@
         S.dummy = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, S.dummy);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(size * size), gl.STATIC_DRAW);
+        failedKey = ''; failedGl = null;
         return true;
     }
 
@@ -277,8 +286,17 @@
         }
         var react = v.audio_react !== undefined ? v.audio_react : 1;
         var kick = audio('kick') * react, bass = audio('bass') * react, hat = audio('hat') * react;
-        var steps = Math.max(1, Math.round(v.steps || 1));
-        var simulate = dt > 0;
+        // Fixed-rate simulation: "Sim Steps / Frame" means steps per 60 fps
+        // frame. Turning, diffusion, decay and deposits happen once per step,
+        // so tying steps to elapsed time keeps the pattern the same at any
+        // frame rate (a 120 Hz screen runs a step every other frame).
+        var perFrame = Math.max(1, Math.round(v.steps || 1));
+        if (dt > 0) stepDebt += Math.min(dt, 0.25) * 60 * perFrame;
+        // +0.3 slack: small frame-time jitter at 60 fps still gives exactly
+        // one step a frame instead of an occasional 0 or 2.
+        var steps = Math.max(0, Math.min(Math.floor(stepDebt + 0.3), perFrame * 4));
+        stepDebt = Math.max(-0.5, Math.min(stepDebt - steps, perFrame));
+        var simulate = steps > 0;
         gl.disable(gl.BLEND);
         gl.disable(gl.DEPTH_TEST);
 
@@ -296,7 +314,7 @@
             gl.uniform1f(u.u_sa, (v.sensor_angle || 0.78) * (1 + kick * 0.6));
             gl.uniform1f(u.u_sd, v.sensor_dist || 20);
             gl.uniform1f(u.u_ra, v.turn_speed || 0.3);
-            gl.uniform1f(u.u_speed, (v.move_speed || 1.5) * (1 + bass * 0.8) * Math.min(3, dt * 60));
+            gl.uniform1f(u.u_speed, (v.move_speed || 1.5) * (1 + bass * 0.8));
             gl.uniform1f(u.u_time, time + s * 0.17);
             gl.uniform1f(u.u_jitter, (v.wander !== undefined ? v.wander : 0.05) + hat * 0.25);
             quad(gl, S.pAgent);
@@ -382,6 +400,8 @@
             { name: 'audio_react', label: 'Beat Reaction', min: 0, max: 2, default: 1, step: 0.01 }
         ],
         render: render,
-        cleanup: function(gl) { destroy(gl || (Renderer.getGL && Renderer.getGL())); }
+        // Leaving the effect (or a context restore, which reloads it) also
+        // forgets a failed setup, so it is tried again next time.
+        cleanup: function(gl) { stepDebt = 0; failedKey = ''; failedGl = null; destroy(gl || (Renderer.getGL && Renderer.getGL())); }
     });
 })();

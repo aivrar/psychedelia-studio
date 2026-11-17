@@ -362,24 +362,34 @@ var PostFxLibrary = (function() {
             drift_x: num('Drift X', -0.01, 0.01, 0, 0.0005),
             drift_y: num('Drift Y', -0.01, 0.01, 0, 0.0005)
         },
-        extraUniforms: 'uniform sampler2D u_prev;\n',
+        extraUniforms: 'uniform sampler2D u_prev;\nuniform float u_fstep;\n',
         react: { zoom: ['kick', 0.25], hue: ['snare', 0.2] },
+        // Settings are per 60 fps frame; u_fstep scales them to the real frame time.
         body: HUE +
             'void main() {\n' +
+            '    float k = u_fstep;\n' +
             '    float aspect = u_resolution.x / max(u_resolution.y, 1.0);\n' +
             '    vec2 d = v_uv - 0.5;\n' +
             '    d.x *= aspect;\n' +
-            '    float c = cos(u_rotate), s = sin(u_rotate);\n' +
-            '    d = mat2(c, -s, s, c) * d / max(u_zoom, 0.5);\n' +
+            '    float c = cos(u_rotate * k), s = sin(u_rotate * k);\n' +
+            '    d = mat2(c, -s, s, c) * d / pow(max(u_zoom, 0.5), k);\n' +
             '    d.x /= aspect;\n' +
-            '    vec3 prev = texture2D(u_prev, d + 0.5 - vec2(u_drift_x, u_drift_y)).rgb;\n' +
-            '    if (abs(u_hue) > 0.0001) prev = max(hueRot(prev, u_hue * 6.28318), 0.0);\n' +
-            '    prev *= u_amount;\n' +
+            '    vec3 prev = texture2D(u_prev, d + 0.5 - vec2(u_drift_x, u_drift_y) * k).rgb;\n' +
+            '    if (abs(u_hue) > 0.0001) prev = max(hueRot(prev, u_hue * k * 6.28318), 0.0);\n' +
             '    vec3 cur = texture2D(u_tex, v_uv).rgb;\n' +
+            '    float a = clamp(u_amount, 0.0, 0.999);\n' +
             '    vec3 outc;\n' +
-            '    if (u_blend < 0.5) outc = max(cur, prev);\n' +
-            '    else if (u_blend < 1.5) outc = cur + prev * (1.0 - cur);\n' +
-            '    else outc = mix(cur, prev, u_amount * 0.85);\n' +
+            '    // Each blend is x\' = m*x + c per 60 fps frame. k frames of it give\n' +
+            '    // m^k*x + c*(1 - m^k)/(1 - m), so brightness and length match 60 fps.\n' +
+            '    if (u_blend < 0.5) outc = max(cur, prev * pow(a, k));\n' +
+            '    else if (u_blend < 1.5) {\n' +
+            '        vec3 m = a * (1.0 - cur);\n' +
+            '        vec3 mk = pow(m, vec3(k));\n' +
+            '        outc = mk * prev + cur * (1.0 - mk) / max(1.0 - m, 1e-4);\n' +
+            '    } else {\n' +
+            '        float s = a * 0.85, m = s * a, mk = pow(m, k);\n' +
+            '        outc = mk * prev + (1.0 - s) * cur * (1.0 - mk) / max(1.0 - m, 1e-4);\n' +
+            '    }\n' +
             '    gl_FragColor = vec4(clamp(outc, 0.0, 1.0), 1.0);\n' +
             '}'
     });
@@ -396,21 +406,24 @@ var PostFxLibrary = (function() {
             twist: num('Echo Twist', -0.03, 0.03, 0, 0.0005),
             mix: num('Mix', 0, 1, 1, 0.01)
         },
-        extraUniforms: 'uniform sampler2D u_prev;\n',
+        extraUniforms: 'uniform sampler2D u_prev;\nuniform float u_fstep;\n',
         react: { drift: ['kick', 0.15], lag2: ['bass', 0.08] },
+        // Settings are per 60 fps frame; u_fstep scales them to the real frame time.
         body:
             'void main() {\n' +
+            '    float k = u_fstep;\n' +
             '    float aspect = u_resolution.x / max(u_resolution.y, 1.0);\n' +
             '    vec2 d = v_uv - 0.5; d.x *= aspect;\n' +
-            '    float c = cos(u_twist), s = sin(u_twist);\n' +
-            '    d = mat2(c, -s, s, c) * d / (1.0 + u_drift);\n' +
+            '    float c = cos(u_twist * k), s = sin(u_twist * k);\n' +
+            '    d = mat2(c, -s, s, c) * d / pow(max(1.0 + u_drift, 0.5), k);\n' +
             '    d.x /= aspect;\n' +
             '    vec3 prev = texture2D(u_prev, d + 0.5).rgb;\n' +
             '    vec3 cur = texture2D(u_tex, v_uv).rgb;\n' +
             '    float m = floor(u_mode + 0.5);\n' +
             '    vec3 lag = m < 0.5 ? vec3(0.0, u_lag1, u_lag2) : (m < 1.5 ? vec3(u_lag1, 0.0, u_lag2) : (m < 2.5 ? vec3(0.0, u_lag2, u_lag2) : vec3(u_lag1 * 0.5, u_lag1, u_lag2)));\n' +
-            '    vec3 echo = mix(cur, prev, lag);\n' +
-            '    gl_FragColor = vec4(mix(cur, echo, u_mix), 1.0);\n' +
+            '    // Per 60 fps frame the history weight is mix*lag; k frames give its k-th power.\n' +
+            '    vec3 w = pow(clamp(lag * clamp(u_mix, 0.0, 1.0), 0.0, 1.0), vec3(k));\n' +
+            '    gl_FragColor = vec4(mix(cur, prev, w), 1.0);\n' +
             '}'
     });
 
@@ -420,15 +433,16 @@ var PostFxLibrary = (function() {
         options: { history: true },
         params: {
             mode: sel('Scan', ['Horizontal Slit', 'Vertical Slit', 'Time Tunnel Outward', 'Time Tunnel Inward'], 0),
-            speed: num('Scan Speed (px/frame)', 0.5, 12, 2, 0.1),
+            speed: num('Scan Speed (px per 60 fps frame)', 0.5, 12, 2, 0.1),
             slit: num('Slit Position', 0, 1, 0.5, 0.01),
             width: num('Slit Width (px)', 1, 60, 4, 0.5),
             mix: num('Mix', 0, 1, 1, 0.01)
         },
-        extraUniforms: 'uniform sampler2D u_prev;\n',
+        extraUniforms: 'uniform sampler2D u_prev;\nuniform float u_fstep;\n',
         react: { speed: ['kick', 0.2] },
         body:
             'void main() {\n' +
+            '    float spd = u_speed * u_fstep;\n' +
             '    vec2 px = 1.0 / u_resolution;\n' +
             '    vec3 cur = texture2D(u_tex, v_uv).rgb;\n' +
             '    float m = floor(u_mode + 0.5);\n' +
@@ -439,7 +453,7 @@ var PostFxLibrary = (function() {
             '        float d = pos - u_slit;\n' +
             '        if (abs(d) < u_width * p1 * 0.5) outc = cur;\n' +
             '        else {\n' +
-            '            vec2 shift = (m < 0.5 ? vec2(0.0, 1.0) : vec2(1.0, 0.0)) * sign(d) * u_speed * p1;\n' +
+            '            vec2 shift = (m < 0.5 ? vec2(0.0, 1.0) : vec2(1.0, 0.0)) * sign(d) * spd * p1;\n' +
             '            outc = texture2D(u_prev, v_uv - shift).rgb;\n' +
             '        }\n' +
             '    } else {\n' +
@@ -447,7 +461,7 @@ var PostFxLibrary = (function() {
             '        vec2 q = (v_uv - 0.5) * vec2(aspect, 1.0);\n' +
             '        float r = length(q);\n' +
             '        float ring = 0.04 + u_slit * 0.6;\n' +
-            '        float s = u_speed * px.y / max(r, 1e-3);\n' +
+            '        float s = spd * px.y / max(r, 1e-3);\n' +
             '        bool inner = r < ring;\n' +
             '        // Outward: live inside the ring, the past moves out. Inward: live outside, the past moves in.\n' +
             '        if (m < 2.5) outc = inner ? cur : texture2D(u_prev, q * (1.0 - s) / vec2(aspect, 1.0) + 0.5).rgb;\n' +
@@ -470,7 +484,7 @@ var PostFxLibrary = (function() {
             jitter: num('Block Jitter', 0, 1, 0.3, 0.01),
             mix: num('Mix', 0, 1, 1, 0.01)
         },
-        extraUniforms: 'uniform sampler2D u_prev;\nuniform float u_age;\n',
+        extraUniforms: 'uniform sampler2D u_prev;\nuniform float u_age;\nuniform float u_fstep;\n',
         react: { smear: ['bass', 0.3] },
         body: LUM +
             'float dh(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n' +
@@ -484,11 +498,13 @@ var PostFxLibrary = (function() {
             '    vec2 g = vec2(luma(texture2D(u_tex, c + vec2(bs * px.x, 0.0)).rgb) - luma(texture2D(u_tex, c - vec2(bs * px.x, 0.0)).rgb),\n' +
             '                  luma(texture2D(u_tex, c + vec2(0.0, bs * px.y)).rgb) - luma(texture2D(u_tex, c - vec2(0.0, bs * px.y)).rgb));\n' +
             '    vec2 jit = vec2(dh(bid + floor(u_time * 3.0)), dh(bid + 17.0 + floor(u_time * 3.0))) - 0.5;\n' +
-            '    vec2 mv = (-g * (l0 - l1) * 60.0 + jit * u_jitter * 0.6) * u_smear * bs * px;\n' +
+            '    // Per 60 fps frame: drag and live bleed scale with the real frame time.\n' +
+            '    vec2 mv = (-g * (l0 - l1) * 60.0 + jit * u_jitter * 0.6) * u_smear * bs * px * u_fstep;\n' +
             '    vec3 smeared = texture2D(u_prev, v_uv - mv).rgb;\n' +
             '    float refresh = 1.0 - smoothstep(0.0, 0.1, u_age);\n' +
-            '    vec3 outc = mix(mix(smeared, cur, u_bleed), cur, refresh);\n' +
-            '    gl_FragColor = vec4(mix(cur, outc, u_mix), 1.0);\n' +
+            '    // History weight per 60 fps frame is (1 - bleed) * mix; k frames give its k-th power.\n' +
+            '    float keep = pow((1.0 - clamp(u_bleed, 0.0, 1.0)) * clamp(u_mix, 0.0, 1.0), u_fstep) * (1.0 - refresh);\n' +
+            '    gl_FragColor = vec4(mix(cur, smeared, keep), 1.0);\n' +
             '}'
     });
 

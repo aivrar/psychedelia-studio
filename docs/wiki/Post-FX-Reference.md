@@ -217,7 +217,7 @@ Category: **Feedback**. ID: `slit_scan`.
 | Control / ID | Default | Range or choices | Step |
 | --- | --- | --- | --- |
 | Scan · `mode` | Horizontal Slit (0) | Horizontal Slit; Vertical Slit; Time Tunnel Outward; Time Tunnel Inward | 1 |
-| Scan Speed (px/frame) · `speed` | 2 | 0.5 to 12 | 0.1 |
+| Scan Speed (px per 60 fps frame) · `speed` | 2 | 0.5 to 12 | 0.1 |
 | Slit Position · `slit` | 0.5 | 0 to 1 | 0.01 |
 | Slit Width (px) · `width` | 4 | 1 to 60 | 0.5 |
 | Mix · `mix` | 1 | 0 to 1 | 0.01 |

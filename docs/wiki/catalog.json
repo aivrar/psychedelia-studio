@@ -4086,7 +4086,7 @@
           "label": "Target X",
           "min": -2,
           "max": 2,
-          "default": -0.4,
+          "default": -1,
           "step": 0.01
         },
         {
@@ -17811,7 +17811,7 @@
           "label": "Iterations",
           "min": 20,
           "max": 300,
-          "default": 100,
+          "default": 30,
           "step": 10,
           "type": "int"
         },
@@ -27598,7 +27598,7 @@
         },
         {
           "name": "speed",
-          "label": "Scan Speed (px/frame)",
+          "label": "Scan Speed (px per 60 fps frame)",
           "min": 0.5,
           "max": 12,
           "default": 2,

@@ -394,7 +394,7 @@ var Renderer = (function() {
             }
 
             if (postActive) {
-                try { PostProcess.apply(time); } catch (err2) {
+                try { PostProcess.apply(time, renderDt); } catch (err2) {
                     reportRenderError('FX', err2); setScreenRedirect(null);
                     if (offline) VideoExport.failRecording('Post-processing failed: ' + err2.message);
                 }
@@ -931,7 +931,9 @@ var Renderer = (function() {
         var uSeedVec = getUniformLocationCached(currentProgram, 'u_seed_vec');
 
         if (uTime !== null) gl.uniform1f(uTime, time);
-        if (uUnwrappedTime !== null) gl.uniform1f(uUnwrappedTime, accumulatedTime);
+        // Same as u_time, including the preview loop wrap, so fractal dives
+        // driven by this clock repeat with the loop like every other effect.
+        if (uUnwrappedTime !== null) gl.uniform1f(uUnwrappedTime, time);
         if (uRes !== null) gl.uniform2f(uRes, drawW, drawH);
         if (uMouse !== null) gl.uniform2f(uMouse, mouseX, mouseY);
         if (uRot !== null) gl.uniform1f(uRot, globalRotation);

@@ -1,7 +1,7 @@
 /* Psychedelia - Truchet Tiles
  * Randomly oriented tiles that join into endless paths: quarter arcs,
  * the "10 PRINT" diagonal maze, woven over/under ribbons and flowing dashed
- * rings. Tiles flip over time with a smooth rotation.
+ * rings. Tiles flip over time by morphing into their new layout.
  */
 EffectRegistry.register({
     name: 'truchet',
@@ -61,9 +61,8 @@ void main() {
     vec2 cell = floor(p);
     float style = floor(u_style + 0.5);
 
-    // Paths are measured in this tile and its eight neighbours, so a tile
-    // in mid-flip draws its path ends past its edge and the glow carries
-    // across tile borders instead of being cut off at them.
+    // Paths are measured in this tile and its eight neighbours, so the glow
+    // carries across tile borders instead of being cut off at them.
     float d = 1e3;
     float along = 0.0;
     float over = 0.0;
@@ -73,26 +72,43 @@ void main() {
         for (int i = -1; i <= 1; i++) {
             vec2 id = cell + vec2(float(i), float(j));
             float h = hash2(id);
-            // Each tile flips on its own schedule with a smooth quarter turn.
-            // Orientation = random base + completed quarter turns + the turn
-            // in progress, so it is continuous across flip periods.
+            // Each tile flips on its own schedule by a quarter turn. Instead
+            // of rotating (which pulls its path ends away from the
+            // neighbours' for the length of the turn), the old layout thins
+            // out while the new one thickens in. Each layout is always a
+            // whole set of paths ending on the tile edge, so nothing breaks
+            // apart mid-flip; halfway through both show as thin lines.
             float flipPhase = t * u_flip_rate + h * 10.0;
             float k = floor(flipPhase);
             float turning = smoothstep(0.0, 0.12, fract(flipPhase));
-            float ang = (floor(h * 2.0) + k + turning) * 1.5707963;
-            vec2 f = rot2(ang) * (p - id - 0.5);
+            float base = floor(h * 2.0) + k;
+            vec2 q = p - id - 0.5;
+            vec2 fA = rot2(base * 1.5707963) * q;
+            vec2 fB = rot2((base + 1.0) * 1.5707963) * q;
+            // Width taken off each layout: 0 when it is the only one, 0.8 of
+            // the path width halfway, unbounded as it goes away (so no
+            // leftover glow of the inactive layout).
+            float thin = u_width * 0.8;
+            float penA = thin * turning / max(1.0 - turning, 0.001);
+            float penB = thin * (1.0 - turning) / max(turning, 0.001);
             if (style < 0.5 || style > 1.5) {
-                float d1 = arcDist(f, vec2(0.5));
-                float d2 = arcDist(f, vec2(-0.5));
-                dOver = min(dOver, d1);
-                dUnder = min(dUnder, d2);
-                if (d1 < d) { d = d1; along = arcAlong(f, vec2(0.5)); over = 1.0; }
-                if (d2 < d) { d = d2; along = arcAlong(f, vec2(-0.5)); over = 0.0; }
+                // Arc around (+0.5, +0.5) is the "over" ribbon in Weave.
+                float a1 = arcDist(fA, vec2(0.5)) + penA, a2 = arcDist(fA, vec2(-0.5)) + penA;
+                float b1 = arcDist(fB, vec2(0.5)) + penB, b2 = arcDist(fB, vec2(-0.5)) + penB;
+                dOver = min(dOver, min(a1, b1));
+                dUnder = min(dUnder, min(a2, b2));
+                if (a1 < d) { d = a1; over = 1.0; along = arcAlong(fA, vec2(0.5)); }
+                if (a2 < d) { d = a2; over = 0.0; along = arcAlong(fA, vec2(-0.5)); }
+                if (b1 < d) { d = b1; over = 1.0; along = arcAlong(fB, vec2(0.5)); }
+                if (b2 < d) { d = b2; over = 0.0; along = arcAlong(fB, vec2(-0.5)); }
             } else {
                 // Diagonal segment from (-0.5, 0.5) to (0.5, -0.5).
-                float s = clamp((f.x - f.y) * 0.5, -0.5, 0.5);
-                float dd = length(f - vec2(s, -s));
-                if (dd < d) { d = dd; along = f.x - f.y; }
+                float sA = clamp((fA.x - fA.y) * 0.5, -0.5, 0.5);
+                float sB = clamp((fB.x - fB.y) * 0.5, -0.5, 0.5);
+                float dA = length(fA - vec2(sA, -sA)) + penA;
+                float dB = length(fB - vec2(sB, -sB)) + penB;
+                if (dA < d) { d = dA; along = fA.x - fA.y; }
+                if (dB < d) { d = dB; along = fB.x - fB.y; }
             }
         }
     }

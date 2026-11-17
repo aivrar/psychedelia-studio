@@ -9,7 +9,7 @@ EffectRegistry.register({
         { name: 'zoom_mode', label: 'Zoom Mode', type: 'select', options: ['Infinite Dive', 'Classic One-Way'], default: 0 },
         { name: 'zoom_depth', label: 'Loop Depth', min: 6, max: 24, default: 9, step: 1 },
         { name: 'max_iter', label: 'Iterations', min: 50, max: 500, default: 200, step: 10, type: 'int' },
-        { name: 'target_x', label: 'Target X', min: -2, max: 2, default: -0.4, step: 0.01 },
+        { name: 'target_x', label: 'Target X', min: -2, max: 2, default: -1.0, step: 0.01 },
         { name: 'target_y', label: 'Target Y', min: -2, max: 2, default: 0.0, step: 0.01 },
         { name: 'color_speed', label: 'Color Speed', min: 0, max: 8, default: 0.4, step: 0.05 },
         { name: 'power', label: 'Power', min: 2, max: 8, default: 2, step: 0.5 },

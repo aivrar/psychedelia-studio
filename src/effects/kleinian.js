@@ -5,7 +5,7 @@ EffectRegistry.register({
     category: 'Fractals',
     description: 'Limit sets of Kleinian groups - intricate lacework of circles and gaskets',
     params: [
-        { name: 'max_iter', label: 'Iterations', min: 20, max: 300, default: 100, step: 10, type: 'int' },
+        { name: 'max_iter', label: 'Iterations', min: 20, max: 300, default: 30, step: 10, type: 'int' },
         { name: 'zoom', label: 'Zoom', min: 0.3, max: 5, default: 1, step: 0.1 },
         { name: 'param_a', label: 'Parameter A', min: 1.5, max: 2.5, default: 1.96, step: 0.01 },
         { name: 'param_b', label: 'Parameter B', min: 0, max: 2, default: 0.5, step: 0.01 },
@@ -39,7 +39,6 @@ void main() {
     float lineTrap = 1e10;
     float circleTrap = 1e10;
     float foldTrap = 1e10;
-    float accumAngle = 0.0;
     float trap = 1e10;
     float orbitLength = 0.0;
 
@@ -49,7 +48,9 @@ void main() {
         float drift = sin(u_time * (0.08 + u_animate * 0.08) + fi * 0.37) * u_animate * 0.035;
         float trapScale = 1.0 + fi * 0.085;
 
-        z.x = mod(z.x + a * 0.5, a) - a * 0.5;
+        // Mirrored repeat (unchanged inside [-a/2, a/2]): the side circle is
+        // not symmetric, so a plain wrap left a hard vertical seam.
+        z.x = abs(mod(z.x - a * 0.5, a * 2.0) - a) - a * 0.5;
         z.y = abs(z.y);
 
         vec2 upperCenter = vec2(0.0, 0.64 + b * 0.12 + drift);
@@ -91,7 +92,6 @@ void main() {
         z = rot2(drift * 0.75 + fi * 0.006 * u_animate) * z;
         z = mix(z, uv, 0.018);
         trap = min(trap, length(z));
-        accumAngle += atan(z.y, z.x);
     }
 
     // Coloring
@@ -99,7 +99,9 @@ void main() {
     float lineEdge = smoothstep(0.006, 0.0, lineTrap);
     float foldEdge = smoothstep(0.010, 0.0, foldTrap);
     float edge = pow(clamp(circleEdge + lineEdge * 0.16 + foldEdge * 0.12, 0.0, 1.0), 2.35);
-    float detail = sin(accumAngle * 0.16 + orbitLength * 0.72) * 0.5 + 0.5;
+    // Detail from the inversion count and the orbit trap, which form bands;
+    // the summed angle used before changed chaotically pixel to pixel (grain).
+    float detail = sin(orbitLength * 0.72 + trap * 3.0) * 0.5 + 0.5;
     float dust = exp(-trap * 1.65) * 0.012;
 
     float hue = fract(trap * 0.2 + orbitLength * 0.05 + u_time * u_color_speed * 0.05);
