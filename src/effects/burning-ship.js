@@ -37,12 +37,17 @@ uniform float u_smoothing;
 vec3 shipPalette(float t) {
     t = fract(t);
     if (u_palette_type > 5.5) return psyLut(t);
-    if (u_palette_type < 0.5) return palette(t, vec3(0.38,0.16,0.04), vec3(0.62,0.32,0.12), vec3(1.0,0.68,0.28), vec3(0.0,0.15,0.20));
-    if (u_palette_type < 1.5) return palette(t, vec3(0.04,0.14,0.28), vec3(0.20,0.48,0.72), vec3(0.42,0.82,1.0), vec3(0.62,0.18,0.04));
-    if (u_palette_type < 2.5) return palette(t, vec3(0.10,0.22,0.08), vec3(0.42,0.76,0.28), vec3(0.82,1.0,0.38), vec3(0.10,0.34,0.60));
-    if (u_palette_type < 3.5) return palette(t, vec3(0.34,0.10,0.24), vec3(0.62,0.24,0.38), vec3(1.0,0.45,0.80), vec3(0.08,0.25,0.52));
-    if (u_palette_type < 4.5) return palette(t, vec3(0.16,0.18,0.22), vec3(0.58,0.62,0.72), vec3(0.78,0.92,1.0), vec3(0.05,0.18,0.38));
-    return palette(t, vec3(0.44,0.26,0.05), vec3(0.70,0.48,0.18), vec3(1.0,0.78,0.32), vec3(0.56,0.05,0.16));
+    vec3 a, b, f, d;
+    if (u_palette_type < 0.5) { a = vec3(0.38,0.16,0.04); b = vec3(0.62,0.32,0.12); f = vec3(1.0,0.68,0.28); d = vec3(0.0,0.15,0.20); }
+    else if (u_palette_type < 1.5) { a = vec3(0.04,0.14,0.28); b = vec3(0.20,0.48,0.72); f = vec3(0.42,0.82,1.0); d = vec3(0.62,0.18,0.04); }
+    else if (u_palette_type < 2.5) { a = vec3(0.10,0.22,0.08); b = vec3(0.42,0.76,0.28); f = vec3(0.82,1.0,0.38); d = vec3(0.10,0.34,0.60); }
+    else if (u_palette_type < 3.5) { a = vec3(0.34,0.10,0.24); b = vec3(0.62,0.24,0.38); f = vec3(1.0,0.45,0.80); d = vec3(0.08,0.25,0.52); }
+    else if (u_palette_type < 4.5) { a = vec3(0.16,0.18,0.22); b = vec3(0.58,0.62,0.72); f = vec3(0.78,0.92,1.0); d = vec3(0.05,0.18,0.38); }
+    else { a = vec3(0.44,0.26,0.05); b = vec3(0.70,0.48,0.18); f = vec3(1.0,0.78,0.32); d = vec3(0.56,0.05,0.16); }
+    // The colour cycle drifts with time; deep in a dive most of the screen
+    // shares one escape count, so a dark stretch of the palette blacked out
+    // the whole view. Keep a dim glow in the palette's own tint instead.
+    return max(palette(t, a, b, f, d), a * 0.6 + 0.04);
 }
 
 vec3 renderBurningShipView(vec2 uv, vec2 target, float dive, float effectTime) {

@@ -38,14 +38,18 @@ float starLayer(vec2 uv, float t, float scale) {
             float d = length(gv - offs - starPos);
             float s = u_star_size * 0.02 * (0.5 + n * 0.5);
 
-            // Star glow
-            brightness += s / (d * d + 0.001);
+            // Star glow: a bright core about s wide with a short halo, so
+            // neighbouring stars and layers don't add up to a grey haze.
+            brightness += 3.0 * s * s / (d * d + s * s);
 
             // Trail
+            // Trail: as wide as the star, fading out above it, so it never
+            // reaches the edge of the 3x3 neighbourhood and gets cut off.
             if (u_trail_length > 0.0) {
-                float trail = smoothstep(u_trail_length * 0.1, 0.0, abs(gv.x - offs.x - starPos.x))
-                            * smoothstep(0.0, u_trail_length * 0.3, (gv.y - offs.y - starPos.y));
-                brightness += trail * s * 10.0;
+                float dy = gv.y - offs.y - starPos.y;
+                float trail = smoothstep(s * 1.5, 0.0, abs(gv.x - offs.x - starPos.x))
+                            * smoothstep(0.0, s, dy) * exp(-max(dy, 0.0) / (u_trail_length * 0.4));
+                brightness += trail * s * 20.0;
             }
         }
     }

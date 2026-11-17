@@ -7,7 +7,7 @@ EffectRegistry.register({
     params: [
         { name: 'speed', label: 'Speed', min: 0.1, max: 5, default: 1.5, step: 0.1 },
         { name: 'twist', label: 'Twist', min: 0, max: 5, default: 1.0, step: 0.1 },
-        { name: 'rings', label: 'Ring Density', min: 1, max: 20, default: 8, step: 1, type: 'int' },
+        { name: 'rings', label: 'Ring Density', min: 1, max: 20, default: 5, step: 1, type: 'int' },
         { name: 'segments', label: 'Segments', min: 1, max: 16, default: 6, step: 1, type: 'int' },
         { name: 'color_shift', label: 'Color Shift', min: 0, max: 2, default: 0.5, step: 0.05 },
         { name: 'wobble', label: 'Wobble', min: 0, max: 2, default: 0.5, step: 0.1 }
@@ -51,7 +51,7 @@ void main() {
 
     // Depth fog
     val *= exp(-dist * 0.3);
-    val *= 1.0 - exp(-depth * 0.1);
+    val *= 1.0 - exp(-depth * 2.5);
 
     vec3 col = hsv2rgb(vec3(hue, sat, val));
 

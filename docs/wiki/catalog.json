@@ -452,7 +452,7 @@
           "label": "Ring Density",
           "min": 1,
           "max": 20,
-          "default": 8,
+          "default": 5,
           "step": 1,
           "type": "int"
         },

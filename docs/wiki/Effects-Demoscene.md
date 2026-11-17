@@ -37,7 +37,7 @@ Effect ID: `tunnel`. CPU fallback declared: **no**. A declared fallback is a red
 | --- | --- | --- | --- |
 | Speed · `speed` | 1.5 | 0.1 to 5 | 0.1 |
 | Twist · `twist` | 1 | 0 to 5 | 0.1 |
-| Ring Density · `rings` | 8 | 1 to 20 | 1 |
+| Ring Density · `rings` | 5 | 1 to 20 | 1 |
 | Segments · `segments` | 6 | 1 to 16 | 1 |
 | Color Shift · `color_shift` | 0.5 | 0 to 2 | 0.05 |
 | Wobble · `wobble` | 0.5 | 0 to 2 | 0.1 |

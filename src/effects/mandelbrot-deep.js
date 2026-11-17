@@ -4,6 +4,7 @@ EffectRegistry.register({
     label: 'Mandelbrot Deep',
     category: 'Fractals',
     description: 'Ultra-detailed Mandelbrot with distance estimation, orbit coloring, and stripe patterns',
+    specialize: ['coloring'],
     params: [
         { name: 'zoom_speed', label: 'Zoom Speed', min: 0, max: 1.5, default: 0.5, step: 0.05 },
         { name: 'zoom_mode', label: 'Zoom Mode', type: 'select', options: ['Infinite Dive', 'Classic One-Way'], default: 0 },
@@ -70,6 +71,7 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
     float avgAngle = 0.0;
     float triSum = 0.0;
     float orbitSamples = 0.0;
+    float prevAng = 0.0;
 
     vec2 zPrev = vec2(0.0);
 
@@ -89,22 +91,26 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
             break;
         }
 
-        // Collect orbit data
+        // Collect only the orbit data the selected colouring (and, in
+        // Infinite Dive, the interior shading) uses. u_coloring is compiled
+        // in as a constant, so the unused sums drop out of the loop.
         float r = sqrt(r2);
-        orbitSum += r;
-        stripeSum += sin(u_stripe_density * atan(z.y, z.x)) * 0.5 + 0.5;
         orbitSamples += 1.0;
-        lastOrbit = r;
         minOrbit = min(minOrbit, r);
-
-        // Triangle inequality avg
-        float prevR = length(zPrev);
-        float diffR = length(z - zPrev);
-        triSum += abs(prevR - diffR) / (prevR + diffR + 0.001);
-
-        // Curvature
-        if (i > 0.0) {
-            avgAngle += abs(atan(z.y, z.x) - atan(zPrev.y, zPrev.x));
+        if (u_coloring > 1.5 && u_coloring < 2.5) orbitSum += r;
+        if (u_coloring > 3.5 && u_coloring < 4.5) {
+            // Triangle inequality avg
+            float prevR = length(zPrev);
+            float diffR = length(z - zPrev);
+            triSum += abs(prevR - diffR) / (prevR + diffR + 0.001);
+        }
+        bool wantCurve = u_coloring > 4.5 || u_zoom_mode < 0.5;
+        if ((u_coloring > 0.5 && u_coloring < 1.5) || wantCurve) {
+            float ang = atan(z.y, z.x);
+            if (u_coloring > 0.5 && u_coloring < 1.5) stripeSum += sin(u_stripe_density * ang) * 0.5 + 0.5;
+            // Curvature: the previous step's angle is reused, one atan per step.
+            if (wantCurve && i > 0.0) avgAngle += abs(ang - prevAng);
+            prevAng = ang;
         }
     }
 

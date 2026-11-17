@@ -115,7 +115,7 @@ void main() {
         col *= 1.0 - ring * u_contours * 0.6;
         col *= 1.0 - pline * u_phase_lines * 0.5;
     } else if (s < 1.5) {
-        col = base * 0.12 * shade;
+        col = base * 0.3 * shade;
         col += hueColor(hue + 0.1) * ring * u_contours * (1.4 + kick * 1.5);
         col += vec3(1.0) * pline * u_phase_lines * 0.5;
     } else if (s < 2.5) {
