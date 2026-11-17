@@ -88,7 +88,10 @@ void main() {
         float z = sqrt(max(1.0 - dot(q, q), 0.0));
         vec3 n = vec3(q, z);
         // Film: thinner at the top (drainage), swirling with noise.
-        float swirlT = u_time * (0.25 + kick * 1.2) * u_swirl;
+        // A kick nudges the swirl forward by a fixed amount. (Multiplying the
+        // running time by the kick made the jump grow the longer the app ran,
+        // until the film colours snapped on every kick.)
+        float swirlT = (u_time * 0.25 + kick * 0.3) * u_swirl;
         float thick = u_film * (1.15 - 0.45 * n.y) + u_swirl * 0.35 * (vnoise(q * 2.5 + vec2(swirlT, fi * 7.0)) - 0.5) + 0.15 * vnoise(q * 6.0 - swirlT);
         vec3 film = 0.5 + 0.5 * cos(6.28318 * (thick * (0.6 + 0.4 * z) * 2.2 * vec3(1.0, 1.17, 1.36)));
         float fres = pow(1.0 - z, 2.2) * 0.85 + 0.06;

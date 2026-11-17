@@ -42,9 +42,6 @@ var AudioReactor = (function() {
     var VALID_SOURCES = Object.create(null);
     SOURCES.forEach(function(s) { VALID_SOURCES[s.id] = true; });
     var TRIGGER_TYPES = ['kick', 'snare', 'hat', 'beat', 'bar', 'drop'];
-    // Hertz, converted using the source's actual sample rate and FFT size.
-    // The old bands stopped at bin 255 and missed the upper spectrum.
-    var BANDS = AudioSignal.bands;
     var HISTORY_SECONDS = 0.7;
 
     var settings = copy(DEFAULTS);
@@ -100,6 +97,16 @@ var AudioReactor = (function() {
     var shake = [0, 0];
     var modCache = { frame: -1, src: null, out: null };
     var beatListeners = [];
+    var settingListeners = [], notifyQueued = false;
+    // Batched to one call per task: a preset or shuffle sets many values.
+    function settingsChanged() {
+        if (notifyQueued || !settingListeners.length) return;
+        notifyQueued = true;
+        Promise.resolve().then(function() {
+            notifyQueued = false;
+            settingListeners.forEach(function(fn) { try { fn(); } catch (e) { /* noop */ } });
+        });
+    }
 
     function copy(o) { var r = {}; for (var k in o) r[k] = o[k]; return r; }
     function clamp01(v) { return v > 1 ? 1 : (v < 0 || !(v === v) ? 0 : v); }
@@ -353,7 +360,11 @@ var AudioReactor = (function() {
         lastAnalysis = a; st.active = active; st.source = active ? a.source : 'fallback';
         // Audio advances during a rendering stall. Keep envelopes and the
         // beat clock on elapsed audio time even when animation dt is clamped.
-        var elapsed = lastUpdateTime === null || now < lastUpdateTime ? dt : Math.max(1 / 240, now - lastUpdateTime);
+        // Real elapsed time drives the clock and envelopes, so above 240
+        // updates a second the beat clock no longer runs fast. Only the onset
+        // detectors (flux is a rate per step) keep a minimum step.
+        var elapsed = lastUpdateTime === null || now < lastUpdateTime ? dt : now - lastUpdateTime;
+        var detectStep = Math.max(1 / 240, elapsed);
         lastUpdateTime = now;
 
         // New hits retain the same peak at every FPS; only old pulses decay.
@@ -370,22 +381,23 @@ var AudioReactor = (function() {
             var rms = AudioSignal.rms(wave, bd) * 1.4;
             var signalGain = clamp01((rms - 0.002 / settings.sensitivity) / (0.01 / Math.sqrt(settings.sensitivity)));
             for (var gatedBin = 0; gatedBin < fft.length; gatedBin++) fft[gatedBin] *= signalGain;
-            updateBand(bands.level, rms * signalGain, dt, elapsed);
-            updateBand(bands.bass, bandMean(fft, rangeFor(spectrumAnalysis, BANDS.bass), false), dt, elapsed);
-            updateBand(bands.mid, bandMean(fft, rangeFor(spectrumAnalysis, BANDS.mid), false), dt, elapsed);
-            updateBand(bands.high, bandMean(fft, rangeFor(spectrumAnalysis, BANDS.high), false), dt, elapsed);
+            var bandStep = Math.min(0.1, elapsed);
+            updateBand(bands.level, rms * signalGain, bandStep, elapsed);
+            updateBand(bands.bass, bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.bass), false), bandStep, elapsed);
+            updateBand(bands.mid, bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.mid), false), bandStep, elapsed);
+            updateBand(bands.high, bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.high), false), bandStep, elapsed);
 
             st.studioSync = st.source === 'studio' && pollStudio(now);
             if (hasPrev && !st.studioSync) {
-                var kf = bandFlux(fft, rangeFor(spectrumAnalysis, BANDS.kick), false);
-                var sf = bandFlux(fft, rangeFor(spectrumAnalysis, BANDS.snare), false);
-                var hf = bandFlux(fft, rangeFor(spectrumAnalysis, BANDS.hat), false);
-                var ke = bandMean(fft, rangeFor(spectrumAnalysis, BANDS.kick), false);
-                var se = bandMean(fft, rangeFor(spectrumAnalysis, BANDS.snare), false);
-                var he = bandMean(fft, rangeFor(spectrumAnalysis, BANDS.hat), false);
-                var ks = detect(det.kick, kf, now, elapsed, ke, ke >= se * 1.1 && ke >= he * 0.75);
-                var ss = detect(det.snare, sf, now, elapsed, se, se >= he * 1.2);
-                var hs = detect(det.hat, hf, now, elapsed, he, he >= se * 0.4);
+                var kf = bandFlux(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.kick), false);
+                var sf = bandFlux(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.snare), false);
+                var hf = bandFlux(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.hat), false);
+                var ke = bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.kick), false);
+                var se = bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.snare), false);
+                var he = bandMean(fft, rangeFor(spectrumAnalysis, AudioSignal.bands.hat), false);
+                var ks = detect(det.kick, kf, now, detectStep, ke, ke >= se * 1.1 && ke >= he * 0.75);
+                var ss = detect(det.snare, sf, now, detectStep, se, se >= he * 1.2);
+                var hs = detect(det.hat, hf, now, detectStep, he, he >= se * 0.4);
                 if (ks) trigger('kick', ks, now);
                 if (ss) trigger('snare', ss, now);
                 if (hs) trigger('hat', hs * 0.8, now);
@@ -467,7 +479,7 @@ var AudioReactor = (function() {
         out.shakeY = f * s.shake * 0.02 * shake[1];
         // Time Surge eases in and out (~80 ms) so beats feel like a push, not a jump cut.
         var speedTarget = 1 + f * s.speed * (1.1 * st.bass + 1.5 * punch);
-        speedSmooth += (speedTarget - speedSmooth) * (1 - Math.exp(-(dt || 0.016) / s.smoothing));
+        speedSmooth += (speedTarget - speedSmooth) * (1 - Math.exp(-(dt >= 0 ? dt : 0.016) / s.smoothing));
         if (!s.speed || !f) speedSmooth = 1;
         out.speed = speedSmooth;
     }
@@ -520,8 +532,21 @@ var AudioReactor = (function() {
         // velocity. Time Surge integrates speed continuously in the renderer.
         if (param.name === 'speed' && !effect.render) return false;
         var shader = typeof effect.shader === 'string' ? effect.shader : '';
-        var uniform = 'u_' + param.name;
-        return !(new RegExp('\\bu_time\\s*[*/]\\s*\\(?\\s*' + uniform + '\\b|\\b' + uniform + '\\s*\\*\\s*\\(?\\s*u_time\\b')).test(shader);
+        var uniform = 'u_' + param.name, clocks = clockNames(shader);
+        return !(new RegExp('\\b(?:' + clocks + ')\\s*[*/]\\s*\\(?\\s*' + uniform + '\\b|\\b' + uniform + '\\s*\\*\\s*\\(?\\s*(?:' + clocks + ')\\b')).test(shader);
+    }
+
+    // u_time and the shader's own clock variables (float t = u_time * ...;
+    // effectTime): a setting multiplied by any of them scales the clock.
+    // A ray distance also called t is not a clock, so only variables that
+    // are set from u_time count.
+    var clockCache = { shader: null, names: '' };
+    function clockNames(shader) {
+        if (clockCache.shader === shader) return clockCache.names;
+        var names = ['u_time', 'u_unwrapped_time'], re = /\bfloat\s+([A-Za-z_]\w*)\s*=\s*\(?\s*u_(?:unwrapped_)?time\b/g, m;
+        while ((m = re.exec(shader))) if (names.indexOf(m[1]) < 0) names.push(m[1]);
+        clockCache = { shader: shader, names: names.join('|') };
+        return clockCache.names;
     }
 
     function getLinkableParams() {
@@ -533,7 +558,7 @@ var AudioReactor = (function() {
         return Controls.getParamDefs().filter(function(p) {
             return (!p.type || p.type === 'float') && typeof p.min === 'number' && typeof p.max === 'number' &&
                 p.max > p.min && spec.indexOf(p.name) < 0 && paramLinkable(effect, p);
-        }).map(function(p) { return { name: p.name, label: p.label || p.name }; });
+        }).map(function(p) { return { name: p.name, label: p.label || p.name, min: p.min, max: p.max, default: p.default }; });
     }
 
     // Conservative, musical defaults. Never guess at camera paths, clocks,
@@ -625,12 +650,14 @@ var AudioReactor = (function() {
             var bounds = ranges[name] || [0, 1];
             settings[name] = Math.max(bounds[0], Math.min(bounds[1], Number(value)));
         }
+        settingsChanged();
     }
 
     function applyPreset(name) {
         var p = PRESETS[name];
         if (!Object.prototype.hasOwnProperty.call(PRESETS, name)) return false;
         for (var k in p) settings[k] = p[k];
+        settingsChanged();
         return true;
     }
 
@@ -744,6 +771,13 @@ var AudioReactor = (function() {
             if (typeof fn !== 'function') return function() {};
             beatListeners.push(fn);
             return function() { beatListeners = beatListeners.filter(function(l) { return l !== fn; }); };
+        },
+        // Called after the on/off switch or any amount changes (the global
+        // toggles listen here instead of polling).
+        onSettingsChange: function(fn) {
+            if (typeof fn !== 'function') return function() {};
+            settingListeners.push(fn);
+            return function() { settingListeners = settingListeners.filter(function(l) { return l !== fn; }); };
         },
         isActive: function() { return fade > 0; }
     };

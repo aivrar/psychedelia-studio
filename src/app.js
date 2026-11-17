@@ -629,7 +629,6 @@
             var width = parseInt(parts[0]);
             var height = parseInt(parts[1]);
             Renderer.setResolution(width, height);
-            Overlays.resize(width, height);
             if (width * height >= 2560 * 1440) {
                 showNotice('High output resolution can heavily load the GPU on raymarched and density effects.', 'info', 5200);
             }

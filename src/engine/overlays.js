@@ -548,8 +548,27 @@ var Overlays = (function() {
     }
 
     // ------------------------------------------------------------ Render
+    // With every overlay off there is nothing to draw: the two layers are
+    // cleared once and later frames skip the layout reads and full clears.
+    var drewLast = true;
+    function anyEnabled() {
+        for (var id in enabled) if (enabled[id] && (id !== 'flash' || params.flash_active)) return true;
+        return false;
+    }
+
     function render(time) {
         if (!ctx) return;
+        if (!anyEnabled()) {
+            if (drewLast) {
+                ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+                if (strobeCtx) strobeCtx.clearRect(0, 0, strobeCanvas.width, strobeCanvas.height);
+                if (strobeCanvas) strobeCanvas.style.mixBlendMode = 'normal';
+                drewLast = false;
+            }
+            st.lastTime = time;
+            return;
+        }
+        drewLast = true;
         syncPosition();
         var w = canvas2d.width;
         var h = canvas2d.height;
@@ -2658,6 +2677,7 @@ var Overlays = (function() {
         triggerFlash: triggerFlash,
         getDefs: function() { return DEFS; },
         getCategories: function() { return CATEGORIES.slice(); },
+        syncTypes: SYNC_TYPES.slice(),
         setMod: setMod,
         getMod: getMod,
         hasMods: hasMods,

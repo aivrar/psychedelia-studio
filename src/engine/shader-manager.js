@@ -380,12 +380,13 @@ void main() {
             }
         }
 
-        // Replace FRAG_OUT with the correct output variable
+        // Replace FRAG_OUT with the correct output variable. Whole words only,
+        // so names that merely contain these (myTexture2Dlookup) are left alone.
         if (isWebGL2) {
-            fragmentSource = fragmentSource.replace(/FRAG_OUT/g, 'fragColor');
-            fragmentSource = fragmentSource.replace(/texture2D/g, 'texture');
+            fragmentSource = fragmentSource.replace(/\bFRAG_OUT\b/g, 'fragColor');
+            fragmentSource = fragmentSource.replace(/\btexture2D\b/g, 'texture');
         } else {
-            fragmentSource = fragmentSource.replace(/FRAG_OUT/g, 'gl_FragColor');
+            fragmentSource = fragmentSource.replace(/\bFRAG_OUT\b/g, 'gl_FragColor');
         }
 
         // Inject global rotation into the effect's main()

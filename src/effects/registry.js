@@ -124,32 +124,39 @@ var EffectRegistry = (function() {
         }
 
         var historyEdit = typeof EditHistory !== 'undefined' ? EditHistory.begin('Change effect') : null;
-        // Cleanup old only after the next effect is known to be renderable.
-        if (previousEffect && previousEffect !== nextEffect && previousEffect.cleanup) {
-            previousEffect.cleanup(Renderer.getGL());
+        // The history edit is always closed, even if a cleanup or init throws;
+        // otherwise every later change would be folded into this one.
+        try {
+            // Cleanup old only after the next effect is known to be renderable.
+            if (previousEffect && previousEffect !== nextEffect && previousEffect.cleanup) {
+                try { previousEffect.cleanup(Renderer.getGL()); } catch (cleanupErr) { console.error('Cleanup failed for ' + previousEffect.name + ':', cleanupErr); }
+            }
+
+            currentEffect = nextEffect;
+            Renderer.setProgram(program);
+
+            // New seed per effect switch (reloadCurrent keeps the old one)
+            if (opts._seedVec) Renderer.setSeed(opts._seed, opts._seedVec);
+            else Renderer.randomizeSeed();
+
+            // Build GUI params
+            Controls.buildParams(currentEffect.params || [], currentEffect.fractalFlight || null);
+            if (opts.values && Controls.setValues) Controls.setValues(opts.values);
+            updateDescription(currentEffect);
+            updateSelect(name);
+
+            // Run init. A failing init is reported and the switch still
+            // completes (clock reset, listeners told), so the UI, the
+            // controls and the running effect stay consistent.
+            if (currentEffect.init) {
+                try { currentEffect.init(Renderer.getGL()); } catch (initErr) { console.error('Init failed for ' + name + ':', initErr); }
+            }
+
+            Renderer.resetTime();
+            notifySwitch(name);
+        } finally {
+            if (historyEdit) EditHistory.end(historyEdit);
         }
-
-        currentEffect = nextEffect;
-        Renderer.setProgram(program);
-
-        // New seed per effect switch (reloadCurrent keeps the old one)
-        if (opts._seedVec) Renderer.setSeed(opts._seed, opts._seedVec);
-        else Renderer.randomizeSeed();
-
-        // Build GUI params
-        Controls.buildParams(currentEffect.params || [], currentEffect.fractalFlight || null);
-        if (opts.values && Controls.setValues) Controls.setValues(opts.values);
-        updateDescription(currentEffect);
-        updateSelect(name);
-
-        // Run init
-        if (currentEffect.init) {
-            currentEffect.init(Renderer.getGL());
-        }
-
-        Renderer.resetTime();
-        notifySwitch(name);
-        if (historyEdit) EditHistory.end(historyEdit);
         return true;
     }
 

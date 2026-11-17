@@ -205,7 +205,8 @@ var AudioAnalysis = (function() {
             sourceNode: null,
             gainNode: null,
             analyser: null,
-            timeData: new Uint8Array(SIZE),
+            timeFull: new Uint8Array(DEFAULT_FFT_SIZE),
+            timeData: null,
             freqData: new Uint8Array(SIZE),
             freqDb: new Float32Array(SIZE)
         };
@@ -461,7 +462,8 @@ var AudioAnalysis = (function() {
             sourceNode: null,
             gainNode: null,
             analyser: null,
-            timeData: new Uint8Array(SIZE),
+            timeFull: new Uint8Array(DEFAULT_FFT_SIZE),
+            timeData: null,
             freqData: new Uint8Array(SIZE),
             freqDb: new Float32Array(SIZE),
             audioTrackCount: 0,
@@ -718,6 +720,16 @@ var AudioAnalysis = (function() {
     // sits above that, so its bins stay pinned at 255 and kicks vanish from
     // the flux. The Beat Reactor reads these unclipped decibels instead; the
     // byte data stays as it was for spectrum overlays and Shadertoy.
+    // The analyser's whole window (fftSize samples) is read, so level and
+    // loudness use all of it; waveform consumers get its newest 512 samples.
+    // (A 512-sample array received only the oldest half of a 1024 window.)
+    function readWaveform(entry) {
+        var size = entry.analyser.fftSize || DEFAULT_FFT_SIZE;
+        if (!entry.timeFull || entry.timeFull.length !== size) entry.timeFull = new Uint8Array(size);
+        entry.analyser.getByteTimeDomainData(entry.timeFull);
+        if (!entry.timeData || entry.timeData.buffer !== entry.timeFull.buffer) entry.timeData = entry.timeFull.subarray(Math.max(0, size - SIZE));
+    }
+
     function readDecibels(entry) {
         entry.freqDbOk = false;
         if (!entry.freqDb || !entry.analyser.getFloatFrequencyData) return;
@@ -870,14 +882,14 @@ var AudioAnalysis = (function() {
         var entry = makeFileEntry();
         if (!entry.objectUrl || !entry.analyser) return fallbackAnalysis(options, 'Audio file is not ready; audio fallback is active.');
         try {
-            entry.analyser.getByteTimeDomainData(entry.timeData);
+            readWaveform(entry);
             entry.analyser.getByteFrequencyData(entry.freqData);
             readDecibels(entry);
         } catch (err) {
             return fallbackAnalysis(options, 'Audio file analyser failed; audio fallback is active.');
         }
         var fields = fileStatusFields();
-        var metrics = computeMetrics(entry.timeData, entry.freqData, true);
+        var metrics = computeMetrics(entry.timeFull, entry.freqData, true);
         if (entry.state !== 'blocked' && entry.state !== 'error' && entry.state !== 'unsupported') {
             updateFileStatus(fields.playing ? 'ready' : 'idle', fields.playing ? '' : 'Audio file paused.', false);
         }
@@ -908,13 +920,13 @@ var AudioAnalysis = (function() {
         var entry = makeCaptureEntry();
         if (!entry.stream || !entry.analyser) return fallbackAnalysis(options, 'Capture Playback is not ready; audio fallback is active.');
         try {
-            entry.analyser.getByteTimeDomainData(entry.timeData);
+            readWaveform(entry);
             entry.analyser.getByteFrequencyData(entry.freqData);
             readDecibels(entry);
         } catch (err) {
             return fallbackAnalysis(options, 'Capture Playback analyser failed; audio fallback is active.');
         }
-        var metrics = computeMetrics(entry.timeData, entry.freqData, true);
+        var metrics = computeMetrics(entry.timeFull, entry.freqData, true);
         updateCaptureStatus('ready', '', false);
         return {
             available: true,

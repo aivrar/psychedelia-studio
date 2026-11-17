@@ -824,10 +824,13 @@ var ShadertoyChannels = (function() {
     }
 
     function fillMicrophoneData(entry) {
-        entry.analyser.getByteTimeDomainData(entry.timeData);
+        // Newest 512 samples of the 1024-sample window (a 512 array would get the oldest half).
+        if (!entry.timeFull || entry.timeFull.length !== entry.analyser.fftSize) entry.timeFull = new Uint8Array(entry.analyser.fftSize);
+        entry.analyser.getByteTimeDomainData(entry.timeFull);
+        var waveStart = Math.max(0, entry.timeFull.length - 512);
         entry.analyser.getByteFrequencyData(entry.freqData);
         for (var x = 0; x < 512; x++) {
-            writePixel(entry.data, 512, x, 0, entry.timeData[x]);
+            writePixel(entry.data, 512, x, 0, entry.timeFull[waveStart + x] === undefined ? 128 : entry.timeFull[waveStart + x]);
             writePixel(entry.data, 512, x, 1, entry.freqData[x]);
         }
     }

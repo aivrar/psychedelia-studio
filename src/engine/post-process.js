@@ -39,8 +39,8 @@ var PostProcess = (function() {
 
     function adaptFrag(src) {
         if (isWebGL2) {
-            src = src.replace(/texture2D/g, 'texture');
-            src = src.replace(/gl_FragColor/g, 'fragColor');
+            src = src.replace(/\btexture2D\b/g, 'texture');
+            src = src.replace(/\bgl_FragColor\b/g, 'fragColor');
             return '#version 300 es\nprecision highp float;\nin vec2 v_uv;\nout vec4 fragColor;\n' + src;
         }
         return 'precision highp float;\nvarying vec2 v_uv;\n' + src;
@@ -344,16 +344,23 @@ var PostProcess = (function() {
     }
 
     // Back to factory state: off, default settings, no Beat Reactor links.
-    function resetEffect(name) {
+    // keepOn: leave the pass switched on with its feedback picture (Shuffle
+    // keeps a trail or echo running when the new look uses it again).
+    function resetEffect(name, keepOn) {
         var fx = effects[name];
         if (!fx) return;
-        fx.enabled = false;
-        destroyHistory(fx);
+        if (!(keepOn === true && fx.enabled)) {
+            fx.enabled = false;
+            destroyHistory(fx);
+        }
         fx.mods = {};
         for (var k in fx.paramDefs) fx.params[k] = fx.paramDefs[k].default !== undefined ? fx.paramDefs[k].default : 0;
     }
 
-    function resetAll() { effectOrder.forEach(resetEffect); }
+    function resetAll(keepOn) {
+        keepOn = Array.isArray(keepOn) ? keepOn : [];
+        effectOrder.forEach(function(name) { resetEffect(name, keepOn.indexOf(name) >= 0); });
+    }
 
     function getEffectiveParam(name, param) {
         var fx = effects[name];

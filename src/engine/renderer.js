@@ -33,6 +33,8 @@ var Renderer = (function() {
     var lastRenderSubmitMs = 0;
     var lastRenderFinishMs = 0;
     var renderCostEmaMs = 0;
+    var frameGapEmaMs = 0;      // time between free-running frames (includes GPU-bound waits)
+    function frameCostMs() { return Math.max(renderCostEmaMs, frameGapEmaMs); }
     var inputPriorityUntilMs = 0;
     var inputPriorityEvents = 0;
     var inputPrioritySkippedFrames = 0;
@@ -180,6 +182,8 @@ var Renderer = (function() {
             destroyLowRes();
         }
         if (typeof PostProcess !== 'undefined') PostProcess.resize(w, h);
+        // The overlay layers must match too, whoever changes the resolution.
+        if (typeof Overlays !== 'undefined' && Overlays.resize) Overlays.resize(w, h);
     }
 
     function getResolution() {
@@ -230,8 +234,10 @@ var Renderer = (function() {
 
     // --- Render Loop ---
     var frameRequests = 0;
+    var sleepTimer = 0;
     function requestFrame(delay) {
         frameRequests++;
+        if (sleepTimer) { clearTimeout(sleepTimer); sleepTimer = 0; }
         // Offline frames do not need to wait for a screen refresh. A task per
         // frame still yields to controls, encoder callbacks and cancellation.
         if (frameExportState) {
@@ -257,6 +263,18 @@ var Renderer = (function() {
         if (frameRequests === requestsBefore) requestFrame();
     }
 
+    // Nothing to draw for a while (paused, or well before the next capped
+    // frame): wait on a timer instead of waking at every screen refresh.
+    // wake() (play, export) cuts the wait short.
+    function sleepFrame(ms) {
+        frameRequests++;
+        if (sleepTimer) clearTimeout(sleepTimer);
+        sleepTimer = setTimeout(function() { sleepTimer = 0; requestFrame(); }, ms);
+    }
+    function wake() {
+        if (sleepTimer) requestFrame();
+    }
+
     function renderFrame(timestamp) {
         if (contextLost) {
             requestFrame(50);
@@ -273,8 +291,8 @@ var Renderer = (function() {
             lastRenderSubmitMs = 0;
             // Pausing the animation during a live recording keeps capturing
             // the still image so its duration and audio remain synchronized.
-            if (isRecordingActive() && VideoExport.captureFrame) VideoExport.captureFrame(true);
-            requestFrame();
+            if (isRecordingActive() && VideoExport.captureFrame) { VideoExport.captureFrame(true); requestFrame(); }
+            else sleepFrame(100);
             return;
         }
 
@@ -318,7 +336,11 @@ var Renderer = (function() {
             if (maxPreviewFps > 0 && lastRenderSubmitMs > 0 &&
                     timestamp - lastRenderSubmitMs < 1000 / maxPreviewFps - 2) {
                 updateFpsCounter();
-                requestFrame();
+                // Sleep through most of the gap; the last stretch still waits
+                // on screen refreshes so the capped frame lands on one.
+                var waitMs = 1000 / maxPreviewFps - 2 - (timestamp - lastRenderSubmitMs);
+                if (waitMs > 24) sleepFrame(waitMs - 18);
+                else requestFrame();
                 return;
             }
         }
@@ -330,6 +352,14 @@ var Renderer = (function() {
         }
 
         var renderDt = offline ? dt : (lastRenderSubmitMs > 0 ? Math.max(0.0001, (timestamp - lastRenderSubmitMs) / 1000.0) : dt);
+        // CPU submit time misses a GPU-bound frame; the gap between frames
+        // shows it. Only free-running frames count (a frame cap, recording
+        // pacing or input-priority skips stretch the gap on purpose).
+        if (!offline && lastRenderSubmitMs > 0 && !recFps && !(maxPreviewFps > 0) &&
+                !isInputPriorityActive(timestamp) && renderDt < 0.5) {
+            var gapMs = renderDt * 1000;
+            frameGapEmaMs = frameGapEmaMs > 0 ? frameGapEmaMs * 0.84 + gapMs * 0.16 : gapMs;
+        }
         var renderStartMs = performance.now();
         lastRenderSubmitMs = timestamp;
 
@@ -667,8 +697,9 @@ var Renderer = (function() {
     function effectiveInputPriorityMinInterval() {
         var profile = currentInputPriorityProfile();
         var base = profile.minIntervalMs;
-        if (inputPriorityMode !== 'visual' && renderCostEmaMs > 28) {
-            base = Math.max(base, Math.min(profile.maxGapMs * 0.72, renderCostEmaMs * 1.18));
+        var cost = frameCostMs();
+        if (inputPriorityMode !== 'visual' && cost > 28) {
+            base = Math.max(base, Math.min(profile.maxGapMs * 0.72, cost * 1.18));
         }
         return Math.round(base);
     }
@@ -714,7 +745,7 @@ var Renderer = (function() {
             framesSkipped: inputPrioritySkippedFrames,
             lastRenderSubmitMs: Math.round(lastRenderSubmitMs),
             lastRenderFinishMs: Math.round(lastRenderFinishMs),
-            renderCostMs: Math.round(renderCostEmaMs)
+            renderCostMs: Math.round(frameCostMs())
         };
     }
 
@@ -1008,10 +1039,14 @@ var Renderer = (function() {
         attribLocationCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
     }
 
+    var cpuImage = null;
     function renderCPU(effect, time, dt) {
         var w = canvas.width;
         var h = canvas.height;
-        var imageData = ctx2d.createImageData(w, h);
+        // One buffer reused while the size stays the same. Effects write every
+        // pixel, as they did into the fresh buffer each frame.
+        if (!cpuImage || cpuImage.width !== w || cpuImage.height !== h) cpuImage = ctx2d.createImageData(w, h);
+        var imageData = cpuImage;
         var params = Controls.getValues();
         effect.cpuRender(imageData.data, w, h, time, dt, params, mouseX, mouseY);
         ctx2d.putImageData(imageData, 0, 0);
@@ -1082,13 +1117,17 @@ var Renderer = (function() {
         running = runningBeforeLoss;
     }
 
-    function play() { running = true; runningBeforeLoss = true; }
+    function play() {
+        if (!running) lastFrameTime = 0; // the first frame after a pause steps one normal frame
+        running = true; runningBeforeLoss = true; wake();
+    }
     function pause() { running = false; runningBeforeLoss = false; }
     function isRunning() { return running; }
     function beginFrameExport(exportFps) {
         if (contextLost) throw new Error('The graphics context is unavailable.');
         if (typeof EffectRegistry !== 'undefined' && EffectRegistry.cancelPendingSwitch) EffectRegistry.cancelPendingSwitch();
         frameExportState = { fps: exportFps, frames: 0, clock: performance.now() / 1000 };
+        wake();
         updateQualityBadge();
         if (typeof AudioReactor !== 'undefined' && AudioReactor.resetSignal) AudioReactor.resetSignal();
     }

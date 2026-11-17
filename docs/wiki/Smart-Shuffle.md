@@ -13,6 +13,8 @@ Shuffle can vary **FX**, **Overlays**, and **Beat Reactor** independently. Each 
 
 Preserve scene is the default. These profiles govern **Shuffle** and **Auto**; they do not remove manual controls or reduce the full range available when editing a setting yourself.
 
+Each shuffle usually picks different FX and overlays from the previous look. A trail or echo FX that stays on keeps its picture instead of restarting from black. Links follow what a setting does (light on hits, colour on bass and slow waves, fine detail on the highs), each setting is linked at most once, and Studio drops are only used while Studio Music is playing. A Beat Reactor shuffle changes the global amounts and links but never switches global reactions back on if you turned them off (V); its Wild links on the main effect stay on light, colour and texture settings, never the camera, view target, formula or clocks.
+
 A style change does not immediately clean up effects already enabled. If an earlier Wild shuffle left a strong mirror or distortion active, reset that panel or switch it off before judging a new restrained setup. Global Zoom Punch, global rotation, and scene-native animation are also separate.
 
 ## Keep existing FX / overlays
