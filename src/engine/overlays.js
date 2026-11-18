@@ -470,7 +470,7 @@ var Overlays = (function() {
         lastTime: null, dt: 0.016,
         laserPhase: 0, spotPhase: 0, figurePhase: 0, partPhase: 0, textPhase: 0, chasePhase: 0,
         rings: [], ringCount: -1, bolts: [], boltCount: -1, fw: [], fwRockets: [], fwCount: -1, fwHue: 0, px: [], spectrum: null, sprites: {}, failed: {},
-        lr: { phase: 0, count: -1, flash: 0, sweep: 0, kickSweep: 0 }, bk: [], bkCount: -1, mx: null, images: {}, imgAngle: 0, bkKeys: [], pxKeys: [],
+        lr: { phase: 0, count: -1, flash: 0, sweep: 0, kickSweep: 0 }, bk: [], bkCount: -1, mx: null, images: {}, imgAngle: 0, bkKeys: [], pxKeys: [], pxScale: 1,
         cn: { start: 0, last: -1, burns: [], burnCount: -1, nextBurn: 0, dip: 0, dipCount: -1 },
         hx: { pulses: [], count: -1, lastFree: 0, last: -1 }, ly: { startBeat: 0, startTime: 0, last: -1, lastBeat: 0, idx: -1, lineStart: 0 }
     };
@@ -533,6 +533,22 @@ var Overlays = (function() {
         return out;
     }
 
+    // Settings given in pixels (glow blur, line and outline widths, point and
+    // particle sizes) are tuned for a 720-pixel-high canvas, like the overlays
+    // that already multiply by h / 720. They are scaled the same way so a
+    // 1080p or 4K render keeps the look of the 720p preview (unchanged at 720).
+    var PIXEL_PARAMS = ['laser_glow', 'laser_thickness', 'bolt_glow', 'bolt_thickness', 'px_line_width', 'px_glow',
+        'px_point_size', 'lr_glow', 'mx_glow', 'hx_glow', 'sg_glow', 'figure_thickness', 'figure_glow',
+        'ring_thickness', 'ring_glow', 'frame_thickness', 'frame_glow', 'particle_size', 'spectrum_glow',
+        'spectrum_thickness', 'text_glow', 'text_outline', 'scanline_density', 'scanline_speed'];
+    function scalePixelParams(src, k) {
+        if (!(k > 0) || Math.abs(k - 1) < 0.001) return src;
+        var out = {};
+        for (var key in src) out[key] = src[key];
+        PIXEL_PARAMS.forEach(function(name) { if (typeof out[name] === 'number') out[name] *= k; });
+        return out;
+    }
+
     function syncType(value) { return SYNC_TYPES[Math.round(Number(value) || 0)] || 'free'; }
 
     function trigger(type) {
@@ -579,7 +595,8 @@ var Overlays = (function() {
         var dt = st.lastTime === null ? 0.016 : time - st.lastTime;
         st.dt = dt > 0 && dt < 0.25 ? dt : 0.016;
         st.lastTime = time;
-        P = buildEffective();
+        P = scalePixelParams(buildEffective(), h / 720);
+        st.pxScale = h / 720;
 
         ctx.clearRect(0, 0, w, h);
         if (strobeCtx) strobeCtx.clearRect(0, 0, strobeCanvas.width, strobeCanvas.height);
@@ -792,7 +809,7 @@ var Overlays = (function() {
             } else if (mode === 2) {
                 var xpos = (Math.sin(t + i * 0.5 + jump) * 0.5 + 0.5) * w;
                 x1 = xpos; y1 = 0;
-                x2 = xpos + Math.sin(t * 2 + seed) * 30; y2 = h * P.laser_length;
+                x2 = xpos + Math.sin(t * 2 + seed) * 30 * st.pxScale; y2 = h * P.laser_length;
             } else if (mode === 3) {
                 angle = Math.sin(t * 0.7 + seed) * Math.PI * 2 + jump;
                 x1 = cx + Math.sin(t * 0.3 + seed * 1.3) * w * 0.3;
@@ -1070,7 +1087,7 @@ var Overlays = (function() {
             r.x = r.sx + r.vx * r.t;
             ctx.globalAlpha = clamp01(P.fw_opacity);
             ctx.strokeStyle = 'rgba(255,220,170,0.9)';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = Math.max(1, 2 * st.pxScale);
             ctx.beginPath();
             ctx.moveTo(r.x, r.y);
             ctx.lineTo(r.x - r.vx * 0.05, r.y + h * 0.05 * (1 - e));
@@ -1082,7 +1099,7 @@ var Overlays = (function() {
         var g = P.fw_gravity * Math.min(w, h) * 0.35;
         var drag = Math.pow(0.35, dt);
         var trail = P.fw_trail * 0.12;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(1, 2 * st.pxScale);
         st.fw = st.fw.filter(function(p) {
             p.life -= dt;
             if (p.life <= 0) return false;
