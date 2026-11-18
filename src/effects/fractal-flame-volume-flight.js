@@ -111,6 +111,9 @@ mat3 rotZ3(float a) {
 vec3 paletteFlame(float t, float paletteMode) {
     t = fract(t);
     if (paletteMode > 3.5) return psyLutLinear(t);
+    // The cosine palettes do not end on the colour they start with: run them
+    // there and back so a wrap of t has no jump.
+    t = 1.0 - abs(1.0 - 2.0 * t);
     if (paletteMode < 0.5) {
         return palette(t, vec3(0.16, 0.10, 0.24), vec3(0.58, 0.28, 0.72), vec3(0.78, 0.48, 1.0), vec3(0.02, 0.18, 0.44));
     } else if (paletteMode < 1.5) {

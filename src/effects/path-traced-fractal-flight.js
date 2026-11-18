@@ -247,6 +247,9 @@ vec3 estimateNormal(vec3 p, float eps) {
     return normalize(n);
 }
 
+// Clear radius around the primary ray origin (the camera); 0 for bounce rays.
+float g_camClear = 0.0;
+
 TraceHit marchTrace(vec3 ro, vec3 rd, float maxDist) {
     float travel = 0.0;
     TraceHit hit = TraceHit(-1.0, 0.0, 0.0, 0.0);
@@ -255,6 +258,7 @@ TraceHit marchTrace(vec3 ro, vec3 rd, float maxDist) {
         if (i >= maxSteps) break;
         vec3 p = ro + rd * travel;
         TraceHit h = mapTrace(p);
+        h.dist = max(h.dist, g_camClear - travel);
         if (h.dist < 0.0016 + travel * 0.00018) {
             hit = h;
             hit.dist = travel;
@@ -317,7 +321,9 @@ void main() {
     float rollValue = u_roll * sin(rollT * 0.48 + mode) + u_global_rotation * 0.2;
     vec3 rd = psyRayDirection(gl_FragCoord.xy, u_resolution, ro, target, u_fov, rollValue);
     float maxDist = 7.2 + u_flight_depth * 0.68;
+    g_camClear = 0.05; // a camera inside the glass used to show a dark frame
     TraceHit hit = marchTrace(ro, rd, maxDist);
+    g_camClear = 0.0;
 
     vec3 col = envTrace(rd, t);
     if (hit.dist > 0.0) {
@@ -362,6 +368,7 @@ void main() {
         col += paletteTrace(caustic + t * 0.030, u_palette) * caustic * (0.06 + u_glow * 0.055);
         col += base * fres * (0.38 + u_glow * 0.28);
         float fogAmount = 1.0 - exp(-hit.dist * (0.048 + u_fog * 0.082));
+        fogAmount = max(fogAmount, 1.0 - smoothstep(0.05, 0.16, hit.dist)); // grazing hits fade into fog
         col = mix(col, envTrace(rd, t) + paletteTrace(t * 0.025, u_palette) * 0.050, fogAmount);
     }
 

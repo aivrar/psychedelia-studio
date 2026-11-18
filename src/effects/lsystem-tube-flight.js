@@ -278,7 +278,10 @@ void main() {
         if (i >= maxSteps) break;
         vec3 p = ro + rd * travel;
         TubeHit h = mapTubes(p);
-        glowAccum += exp(-abs(h.dist) * 26.0) * 0.010;
+        // Clear bubble around the camera (distance from it is just travel): a
+        // camera inside a tube used to hit at once and show a dark frame.
+        glowAccum += exp(-abs(h.dist) * 26.0) * 0.010; // glow from the real tubes
+        h.dist = max(h.dist, 0.05 - travel);
         if (h.dist < 0.0015) {
             hitT = travel;
             hit = h;
@@ -309,6 +312,7 @@ void main() {
         col += base * rim * (0.35 + u_glow * 0.26);
         col += paletteTube(ring + t * 0.035, u_palette) * glowAccum * u_glow;
         float fogAmount = 1.0 - exp(-hitT * (0.052 + u_fog * 0.082));
+        fogAmount = max(fogAmount, 1.0 - smoothstep(0.05, 0.16, hitT)); // grazing hits fade into fog
         col = mix(col, backgroundTube(rd, t) + paletteTube(t * 0.025, u_palette) * 0.050, fogAmount);
     } else {
         col += paletteTube(t * 0.03 + glowAccum, u_palette) * glowAccum * (0.6 + u_glow * 0.45);

@@ -270,8 +270,14 @@ VariantHit foldedBoxDE(vec3 p) {
     return VariantHit(max(dist, 0.00003), iter, trap, cell, bulb);
 }
 
+// Clear bubble around the camera: the path can pass through the fractal,
+// and a ray starting inside it filled the screen with one flat colour.
+const float CAM_CLEAR = 0.05;
+vec3 g_cam = vec3(1e5);
+float camClear(vec3 p) { return CAM_CLEAR - length(p - g_cam); }
+
 float mapScene(vec3 p) {
-    return foldedBoxDE(p).dist;
+    return max(foldedBoxDE(p).dist, camClear(p));
 }
 
 vec3 safeNormalize3(vec3 v, vec3 fallback) {
@@ -387,6 +393,7 @@ void main() {
     float fovBreath = u_fov * (1.0 + 0.07 * sin(t * 0.21 + familyPhase) + 0.02 * u_surf_motion * sin(t * 0.57));
     vec3 rd = psyRayDirection(gl_FragCoord.xy, u_resolution, ro, target, fovBreath, rollValue);
 
+    g_cam = ro;
     float total = 0.0;
     float hitT = -1.0;
     VariantHit hitInfo = VariantHit(0.0, 0.0, 0.0, 0.0, 0.0);
@@ -401,10 +408,12 @@ void main() {
         if (float(i) >= 78.0 + u_detail * 26.0) break;
         vec3 p = ro + rd * total;
         VariantHit h = foldedBoxDE(p);
-        float dist = h.dist;
-        if (i == 0 && dist < epsBase * 3.0) escaping = true;
+        float dist = max(h.dist, camClear(p));
+        // The escape test uses the real distance (the camera bubble would hide
+        // the solid it is meant to detect).
+        if (i == 0 && h.dist < epsBase * 3.0) escaping = true;
         if (escaping) {
-            if (dist > epsBase * 8.0) {
+            if (h.dist > epsBase * 8.0) {
                 escaping = false;
             } else {
                 total += 0.03;
@@ -480,6 +489,9 @@ void main() {
     vec3 hardFallback = vec3(0.012, 0.014, 0.020) + textureCol;
     col += paletteFoldedBox(t * 0.035 + total * 0.034, u_palette) * glowAccum * u_glow;
     float fogAmount = cleanFloat(1.0 - exp(-total * (0.049 + u_fog * 0.080)), 0.35);
+    // Hits right at the bubble (camera grazing or inside the surface) fade
+    // into the fog instead of popping in as a flat full-screen colour.
+    if (hitT >= 0.0) fogAmount = max(fogAmount, 1.0 - smoothstep(CAM_CLEAR, 0.16, hitT));
     vec3 fallbackCol = cleanColor(background(rd, t) + paletteFoldedBox(t * 0.02, u_palette) * 0.046, hardFallback);
     col = mix(cleanColor(col, fallbackCol), fallbackCol, clamp(fogAmount, 0.0, 1.0));
     col += textureCol;
