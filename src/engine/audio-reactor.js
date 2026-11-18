@@ -270,27 +270,56 @@ var AudioReactor = (function() {
         onsetTimes.push(now);
         if (onsetTimes.length > 24) onsetTimes.shift();
         if (onsetTimes.length < 6) return;
-        var votes = {};
+        // Find the beat period that the recent kicks fit best. Each gap
+        // between a kick and the 1-3 kicks before it counts as a whole number
+        // of beats, so a missed kick is just a two-beat gap and a stray onset
+        // is bridged by the longer gaps. Fits are judged with a tolerance in
+        // seconds, so frame-timed onsets do not split the votes between
+        // tempo bins (which used to let half the tempo win).
+        var gaps = [], adjSkipped = 0;
         for (var i = 1; i < onsetTimes.length; i++) {
             for (var j = i - 1; j >= Math.max(0, i - 3); j--) {
-                var ioi = onsetTimes[i] - onsetTimes[j];
-                if (ioi < 0.2 || ioi > 2.4) continue;
-                var b = 60 / ioi;
-                while (b < 40) b *= 2;
-                while (b > 240) b /= 2;
-                var bin = Math.round(b / 2) * 2;
-                votes[bin] = (votes[bin] || 0) + (j === i - 1 ? 1 : 0.5);
+                var d = onsetTimes[i] - onsetTimes[j];
+                if (d >= 0.2 && d <= 2.4) gaps.push({ d: d, adj: j === i - 1 });
+                else if (j === i - 1) adjSkipped++; // still counts against confidence
             }
         }
-        var best = 0, bestVotes = 0;
-        for (var key in votes) {
-            var v = votes[key] + (votes[+key - 2] || 0) * 0.5 + (votes[+key + 2] || 0) * 0.5;
-            if (v > bestVotes) { bestVotes = v; best = +key; }
+        var best = null;
+        for (var c = 0; c < gaps.length; c++) {
+            for (var div = 1; div <= 3; div++) {
+                var period = gaps[c].d / div;
+                if (period < 0.25 || period > 1.5) continue;
+                var fit = fitPeriod(gaps, period);
+                if (!best || fit.score > best.score) best = fit;
+            }
         }
-        if (!best) return;
-        var totalVotes = Object.keys(votes).reduce(function(total, key) { return total + votes[key]; }, 0);
-        st.tempoConfidence = clamp01(1.75 * bestVotes / Math.max(1, totalVotes) * Math.min(1, (onsetTimes.length - 3) / 8));
-        st.bpm = st.bpm ? st.bpm + (best - st.bpm) * 0.25 : best;
+        if (!best || !(best.period > 0)) { st.tempoConfidence = 0; return; }
+        best = fitPeriod(gaps, best.period); // score again at the refined period
+        var bpm = 60 / best.period;
+        while (bpm < 40) bpm *= 2;
+        while (bpm > 240) bpm /= 2;
+        st.tempoConfidence = clamp01(best.adjHits / Math.max(1, best.adjCount + adjSkipped) * Math.min(1, (onsetTimes.length - 3) / 8));
+        st.bpm = st.bpm ? st.bpm + (bpm - st.bpm) * 0.25 : bpm;
+    }
+
+    // How well the gaps fit whole numbers of beats of this period. A gap of n
+    // beats scores 1/n, so half the true period (which fits every gap twice
+    // over) scores half as much, and double it misses the one-beat gaps.
+    // Also returns the least-squares period over the gaps that fit.
+    function fitPeriod(gaps, period) {
+        var score = 0, sumDN = 0, sumNN = 0, adjHits = 0, adjCount = 0;
+        for (var g = 0; g < gaps.length; g++) {
+            var d = gaps[g].d, n = Math.round(d / period);
+            if (gaps[g].adj) adjCount++;
+            var err = Math.abs(d - n * period);
+            if (n < 1 || n > 6 || err > 0.045 + 0.04 * d) continue;
+            score += 1 / n;
+            sumDN += d * n; sumNN += n * n;
+            // Confidence counts only next-kick gaps of one or two beats that
+            // land closely, so random onsets do not look like a steady beat.
+            if (gaps[g].adj && n <= 2 && err <= 0.03 + 0.02 * d) adjHits++;
+        }
+        return { score: score, period: sumNN ? sumDN / sumNN : period, adjHits: adjHits, adjCount: adjCount };
     }
 
     function pollStudio(now) {
