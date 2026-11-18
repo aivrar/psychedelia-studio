@@ -106,7 +106,7 @@ void main() {
         col += pal(film + 0.3) * pow(1.0 - facing, 3.0) * 0.8;
         col = mix(col, fogCol, 1.0 - exp(-tt * 0.16));
     }
-    col += pal(z * 0.03 + tt * 0.05) * glow * u_glow * (1.0 + kick * 1.4);
+    col += pal(z * 0.03 + tt * 0.05) * glow * u_glow * (1.0 + kick * 0.7); // kick boost halved: less of a flash at the default
     col = 1.0 - exp(-col * 1.5);
     FRAG_OUT = vec4(pow(col, vec3(0.92)), 1.0);
 }

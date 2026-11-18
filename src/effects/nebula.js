@@ -103,7 +103,7 @@ void main() {
     vec3 ca, cb, core;
     nebulaColors(ca, cb, core);
     float dens = u_density * (1.0 + bass * 0.6);
-    float glow = u_glow * (1.0 + kick * 0.8 + bass * 0.3);
+    float glow = u_glow * (1.0 + kick * 0.4 + bass * 0.3); // kick boost halved: less of a flash at the default
     vec3 col = vec3(0.0);
     float T = 1.0;
     float z = 0.2;

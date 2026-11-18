@@ -99,9 +99,25 @@ void main() {
     // Camera path: forward along z, winding in x, a steady height above the ground.
     float z = u_time * u_speed * 60.0 + seedPhase() * 300.0;
     vec2 camXZ = vec2(sin(z * 0.0015) * 300.0, z);
-    float ground = terrain(camXZ, 4);
     float waterH = u_water * 120.0 * u_mountains;
-    float camY = max(ground, waterH) + 25.0 + 40.0 * u_altitude;
+    // Height from the ground averaged along the path (a little behind to
+    // further ahead), so the camera glides over ridges instead of jerking up
+    // and down with every bump below it. A soft maximum with the ground
+    // right underneath (as drawn) keeps it at least 25 + 40 x altitude - 8
+    // above the surface, clear of peaks the average undercuts.
+    float hAvg = 0.0, wSum = 0.0;
+    for (int k = -2; k <= 5; k++) {
+        float zk = z + float(k) * 40.0;
+        float w = 1.0 - abs(float(k) - 1.5) / 5.0;
+        hAvg += max(terrain(vec2(sin(zk * 0.0015) * 300.0, zk), 2), waterH) * w;
+        wSum += w;
+    }
+    hAvg /= wSum;
+    float hHere = max(terrain(camXZ, 6), waterH) - 8.0; // same octaves as the raymarch
+    float hBase = 0.5 * (hAvg + hHere + sqrt((hAvg - hHere) * (hAvg - hHere) + 400.0));
+    // Clearance grows with taller mountains, whose steeper walls otherwise
+    // pass right by the camera.
+    float camY = hBase + (25.0 + 40.0 * u_altitude) * max(1.0, u_mountains);
     vec3 ro = vec3(camXZ.x, camY, camXZ.y);
     vec2 aheadXZ = vec2(sin((z + 120.0) * 0.0015) * 300.0, z + 120.0);
     vec3 target = vec3(aheadXZ.x, camY - 18.0 - 10.0 * u_altitude, aheadXZ.y);

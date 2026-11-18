@@ -68,6 +68,7 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
     float stripeSum = 0.0;
     float lastOrbit = 0.0;
     float minOrbit = 1e10;
+    vec2 zMin = vec2(1e3); // orbit point closest to the origin (interior colour)
     float avgAngle = 0.0;
     float triSum = 0.0;
     float orbitSamples = 0.0;
@@ -91,12 +92,13 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
             break;
         }
 
-        // Collect only the orbit data the selected colouring (and, in
-        // Infinite Dive, the interior shading) uses. u_coloring is compiled
+        // Collect only the orbit data the selected colouring (and the
+        // interior shading) uses. u_coloring is compiled
         // in as a constant, so the unused sums drop out of the loop.
         float r = sqrt(r2);
         orbitSamples += 1.0;
         minOrbit = min(minOrbit, r);
+        if (r2 < dot(zMin, zMin)) zMin = z;
         if (u_coloring > 1.5 && u_coloring < 2.5) orbitSum += r;
         if (u_coloring > 3.5 && u_coloring < 4.5) {
             // Triangle inequality avg
@@ -104,7 +106,7 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
             float diffR = length(z - zPrev);
             triSum += abs(prevR - diffR) / (prevR + diffR + 0.001);
         }
-        bool wantCurve = u_coloring > 4.5 || u_zoom_mode < 0.5;
+        bool wantCurve = u_coloring > 4.5;
         if ((u_coloring > 0.5 && u_coloring < 1.5) || wantCurve) {
             float ang = atan(z.y, z.x);
             if (u_coloring > 0.5 && u_coloring < 1.5) stripeSum += sin(u_stripe_density * ang) * 0.5 + 0.5;
@@ -151,8 +153,10 @@ vec3 renderDeepMandelbrotView(vec2 uv, vec2 target, float dive, float effectTime
         col = getPal(t_color + effectTime * u_color_speed * 0.05);
     } else if (u_zoom_mode < 0.5) {
         float orbit = minOrbit < 1e9 ? minOrbit : length(z);
-        float angle = atan(z.y, z.x);
-        float t_color = fract(orbit * 0.55 + angle * 0.15915 + avgAngle * 0.025 + length(uv) * 0.25 + effectTime * u_color_speed * 0.04);
+        // From the closest orbit point, not the last iterate, so the colour
+        // holds still as the dive's iteration budget grows.
+        float angle = atan(zMin.y, zMin.x);
+        float t_color = fract(orbit * 0.55 + angle * 0.15915494 + length(uv) * 0.25 + effectTime * u_color_speed * 0.04);
         col = getPal(t_color * 4.0) * (0.32 + 0.68 * smoothstep(0.0, 0.9, orbit));
     }
 

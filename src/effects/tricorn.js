@@ -60,11 +60,16 @@ vec3 renderTricornView(vec2 uv, vec2 target, float dive, float effectTime) {
     float iter = 0.0;
     float maxI = psyDiveIterations(u_max_iter, dive, 500.0);
     float escaped = 0.0;
+    // Orbit point closest to the origin: the inside of the set is coloured
+    // from it, not from the last iterate, so it holds still as the dive's
+    // iteration budget grows (the last iterate jumps with every extra step).
+    vec2 zMin = vec2(1e3);
 
     for (float i = 0.0; i < 500.0; i++) {
         if (i >= maxI) break;
         z = cpow_conj(z, u_power) + c;
         iter = i + 1.0;
+        if (dot(z, z) < dot(zMin, zMin)) zMin = z;
         if (dot(z, z) > 256.0) {
             escaped = 1.0;
             break;
@@ -77,8 +82,8 @@ vec3 renderTricornView(vec2 uv, vec2 target, float dive, float effectTime) {
         float t = sl / u_max_iter;
         col = tricornPalette(t * 4.0 + effectTime * u_color_speed * 0.1);
     } else if (u_zoom_mode < 0.5) {
-        float orbit = length(z);
-        float angle = atan(z.y, z.x);
+        float orbit = length(zMin);
+        float angle = atan(zMin.y, zMin.x);
         float t = fract(orbit * 0.4 + angle * 0.15915 + length(uv) * 0.32 + effectTime * u_color_speed * 0.05);
         col = tricornPalette(t) * (0.30 + 0.70 * smoothstep(0.0, 1.25, orbit));
     }
