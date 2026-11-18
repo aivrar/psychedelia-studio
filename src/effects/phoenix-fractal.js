@@ -35,7 +35,9 @@ void main() {
     vec2 p = vec2(u_p_real, u_p_imag);
 
     if (u_morph > 0.0) {
-        c += vec2(sin(t * 0.2), cos(t * 0.3)) * u_morph * 0.3;
+        // Small swing: the default C sits on the edge between a solid shape and
+        // scattered dust, and a wide swing spent most of each cycle in the dust.
+        c += vec2(sin(t * 0.2), cos(t * 0.3)) * u_morph * 0.1;
         p += vec2(sin(t * 0.15), cos(t * 0.25)) * u_morph * 0.2;
     }
 
