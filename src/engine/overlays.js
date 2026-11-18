@@ -470,7 +470,7 @@ var Overlays = (function() {
         lastTime: null, dt: 0.016,
         laserPhase: 0, spotPhase: 0, figurePhase: 0, partPhase: 0, textPhase: 0, chasePhase: 0,
         rings: [], ringCount: -1, bolts: [], boltCount: -1, fw: [], fwRockets: [], fwCount: -1, fwHue: 0, px: [], spectrum: null, sprites: {}, failed: {},
-        lr: { phase: 0, count: -1, flash: 0, sweep: 0, kickSweep: 0 }, bk: [], bkCount: -1, mx: null, images: {}, imgAngle: 0, spriteCount: 0,
+        lr: { phase: 0, count: -1, flash: 0, sweep: 0, kickSweep: 0 }, bk: [], bkCount: -1, mx: null, images: {}, imgAngle: 0, bkKeys: [], pxKeys: [],
         cn: { start: 0, last: -1, burns: [], burnCount: -1, nextBurn: 0, dip: 0, dipCount: -1 },
         hx: { pulses: [], count: -1, lastFree: 0, last: -1 }, ly: { startBeat: 0, startTime: 0, last: -1, lastBeat: 0, idx: -1, lineStart: 0 }
     };
@@ -490,6 +490,8 @@ var Overlays = (function() {
         strobeCtx = strobeCanvas.getContext('2d');
         syncPosition();
 
+        // Re-running init must not stack another listener.
+        window.removeEventListener('resize', syncPosition);
         window.addEventListener('resize', syncPosition);
     }
 
@@ -1361,7 +1363,10 @@ var Overlays = (function() {
     function bokehSprite(shape, col, soft) {
         var key = 'bk' + shape + '|' + col.map(function(v) { return Math.round(v * 15); }).join(',') + '|' + Math.round(soft * 10);
         if (st.sprites[key]) return st.sprites[key];
-        if (++st.spriteCount > 400) { st.sprites = {}; st.spriteCount = 0; }
+        // Keep at most 48 bokeh sprites (about a dozen are in use at once),
+        // dropping the oldest, instead of piling up hundreds of canvases and
+        // then redrawing them all after a full reset.
+        if (st.bkKeys.length >= 48) delete st.sprites[st.bkKeys.shift()];
         var S = 128, c = document.createElement('canvas');
         c.width = c.height = S;
         var g = c.getContext('2d');
@@ -1378,6 +1383,7 @@ var Overlays = (function() {
         g.strokeStyle = rgba(mixWhite(col, 0.5), 0.75);
         g.stroke();
         st.sprites[key] = c;
+        st.bkKeys.push(key);
         return c;
     }
 
@@ -2187,6 +2193,8 @@ var Overlays = (function() {
     function sprite(shape, key, cssColor) {
         var id = shape + '|' + key;
         if (st.sprites[id]) return st.sprites[id];
+        // Same cap as the bokeh sprites: changing colours must not pile up canvases.
+        if (st.pxKeys.length >= 48) delete st.sprites[st.pxKeys.shift()];
         var S = 64, c = document.createElement('canvas');
         c.width = c.height = S;
         var g = c.getContext('2d');
@@ -2229,6 +2237,7 @@ var Overlays = (function() {
             g.fillRect(m * 0.5, m * 0.5, m, m);
         }
         st.sprites[id] = c;
+        st.pxKeys.push(id);
         return c;
     }
 

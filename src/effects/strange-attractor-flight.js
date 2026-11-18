@@ -55,7 +55,13 @@ var StrangeAttractorFeed = (function() {
         if (cache.key !== key) cache = { key: key, data: compute(mode, chaos) };
         var loc = getLocation(program, 'u_attr_points[0]');
         if (loc === null) loc = getLocation(program, 'u_attr_points');
-        if (loc !== null) gl.uniform3fv(loc, cache.data);
+        // A program keeps its uniform values, so the point table is sent only
+        // when the program or the attractor changes, not every frame.
+        if (loc !== null && (cache.program !== program || cache.uploaded !== key)) {
+            gl.uniform3fv(loc, cache.data);
+            cache.program = program;
+            cache.uploaded = key;
+        }
         gl.uniform1f(countLoc, loc !== null ? COUNT : 0);
     }
 

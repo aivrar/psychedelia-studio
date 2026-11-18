@@ -271,8 +271,14 @@ HyperHit hypercomplexDE(vec3 p) {
     return HyperHit(max(de, 0.00001), iter, trap, sliceTrap);
 }
 
+// Clear bubble around the camera: the path can pass through the fractal,
+// and a ray starting inside it filled the screen with one flat colour.
+const float CAM_CLEAR = 0.05;
+vec3 g_cam = vec3(1e5);
+float camClear(vec3 p) { return CAM_CLEAR - length(p - g_cam); }
+
 float mapScene(vec3 p) {
-    return hypercomplexDE(p).dist;
+    return max(hypercomplexDE(p).dist, camClear(p));
 }
 
 // Tetrahedral normal from a single mapScene() call site inside a loop.
@@ -364,6 +370,7 @@ void main() {
     float fovBreath = u_fov * (1.0 + 0.07 * sin(t * 0.21 + targetMode) + 0.02 * u_slice_motion * sin(t * 0.52));
     vec3 rd = psyRayDirection(gl_FragCoord.xy, u_resolution, ro, target, fovBreath, rollValue);
 
+    g_cam = ro;
     float total = 0.0;
     float hitT = -1.0;
     HyperHit hitInfo = HyperHit(0.0, 0.0, 0.0, 0.0);
@@ -374,7 +381,7 @@ void main() {
         if (float(i) >= 76.0 + u_detail * 26.0) break;
         vec3 p = ro + rd * total;
         HyperHit h = hypercomplexDE(p);
-        float dist = h.dist;
+        float dist = max(h.dist, camClear(p));
         glowAccum += exp(-dist * 38.0) * 0.013;
         if (dist < epsBase * max(1.0, total * 0.48)) {
             hitT = total;
@@ -429,6 +436,9 @@ void main() {
     col += sliceTexture;
     col *= 1.0 + (weave - 0.5) * textureGate * 0.11;
     float fogAmount = 1.0 - exp(-total * (0.048 + u_fog * 0.078));
+    // Hits right at the bubble (camera grazing or inside the surface) fade
+    // into the fog instead of popping in as a flat full-screen colour.
+    if (hitT >= 0.0) fogAmount = max(fogAmount, 1.0 - smoothstep(CAM_CLEAR, 0.16, hitT));
     col = mix(col, background(rd, t) + paletteHyper(t * 0.02, u_palette) * 0.044, fogAmount);
     col = psyGamma(psyTonemap(col));
     FRAG_OUT = vec4(col, 1.0);

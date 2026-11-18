@@ -265,8 +265,14 @@ FoamHit foamDE(vec3 p) {
     return FoamHit(max(dist, 0.000015), iter, sqrt(trap), cell, inversions);
 }
 
+// Clear bubble around the camera: the path can pass through the fractal,
+// and a ray starting inside it filled the screen with one flat colour.
+const float CAM_CLEAR = 0.05;
+vec3 g_cam = vec3(1e5);
+float camClear(vec3 p) { return CAM_CLEAR - length(p - g_cam); }
+
 float mapScene(vec3 p) {
-    return foamDE(p).dist;
+    return max(foamDE(p).dist, camClear(p));
 }
 
 // Tetrahedral normal from a single mapScene() call site inside a loop.
@@ -355,6 +361,7 @@ void main() {
     float fovBreath = u_fov * (1.0 + 0.07 * sin(t * 0.21 + familyPhase) + 0.02 * u_cell_breath * sin(t * 0.57));
     vec3 rd = psyRayDirection(gl_FragCoord.xy, u_resolution, ro, target, fovBreath, rollValue);
 
+    g_cam = ro;
     float total = 0.0;
     float hitT = -1.0;
     FoamHit hitInfo = FoamHit(0.0, 0.0, 0.0, 0.0, 0.0);
@@ -365,7 +372,7 @@ void main() {
         if (float(i) >= 80.0 + u_detail * 27.0) break;
         vec3 p = ro + rd * total;
         FoamHit h = foamDE(p);
-        float dist = h.dist;
+        float dist = max(h.dist, camClear(p));
         glowAccum += exp(-dist * 38.0) * 0.005;
         if (dist < epsBase * max(1.0, total * 0.52)) {
             hitT = total;
@@ -423,6 +430,9 @@ void main() {
     col += foamTexture;
     col *= 1.0 + (weave - 0.5) * textureGate * 0.11;
     float fogAmount = 1.0 - exp(-total * (0.050 + u_fog * 0.080));
+    // Hits right at the bubble (camera grazing or inside the surface) fade
+    // into the fog instead of popping in as a flat full-screen colour.
+    if (hitT >= 0.0) fogAmount = max(fogAmount, 1.0 - smoothstep(CAM_CLEAR, 0.16, hitT));
     col = mix(col, background(rd, t) + paletteFoam(t * 0.02, u_palette) * 0.048, fogAmount);
     if (mode >= 1.5 && mode < 2.5) {
         vec2 cathedralUv = (gl_FragCoord.xy - u_resolution * 0.5) / min(u_resolution.x, u_resolution.y);
